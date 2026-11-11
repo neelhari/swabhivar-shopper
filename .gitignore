@@ -1,0 +1,56 @@
+# Dependencies
+node_modules/
+*/node_modules/
+
+# Environment and Secret configuration files
+.env
+.env.*
+!.env.example
+*.env
+*/.env
+*/.env.*
+!*/.env.example
+
+# Production builds
+dist/
+dist-ssr/
+build/
+*/dist/
+*/dist-ssr/
+*/build/
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+*/logs/
+
+# Coverage and testing
+coverage/
+*/coverage/
+.nyc_output/
+*/.nyc_output/
+
+# Editor & OS files
+.vscode/*
+!.vscode/extensions.json
+.idea/
+.DS_Store
+Thumbs.db
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+.kombai/
+*/.kombai/
+
+# Cache & temporary files
+.eslintcache
+.stylelintcache
+*.tsbuildinfo
+
