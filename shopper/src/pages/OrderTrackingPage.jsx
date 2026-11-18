@@ -98,19 +98,27 @@ export function OrderTrackingPage() {
           initial={{ y: 20, opacity: 0 }}
           animate={{ y: 0, opacity: 1 }}
           transition={{ duration: 0.5, delay: 0.7 }}
-          className="w-full space-y-4"
+          className="w-full space-y-3"
         >
           <button 
-            onClick={() => navigate('/category/all')}
+            onClick={() => navigate('/my-orders')}
             className="w-full bg-gradient-to-r from-brand-navy to-brand-maroon text-white font-bold text-base rounded-2xl py-4 shadow-lg shadow-brand-navy/20 hover:shadow-xl hover:-translate-y-0.5 transition-all flex items-center justify-center gap-2"
           >
+            <Package className="w-5 h-5" />
+            Track My Order in 'My Orders'
+          </button>
+
+          <button 
+            onClick={() => navigate('/category/all')}
+            className="w-full bg-white text-gray-800 font-bold text-base rounded-2xl py-3.5 border border-gray-200 shadow-sm hover:bg-gray-50 transition-all flex items-center justify-center gap-2"
+          >
+            <ShoppingBag className="w-5 h-5 text-gray-600" />
             Continue Shopping
-            <ShoppingBag className="w-5 h-5" />
           </button>
           
           <button 
             onClick={() => navigate('/')}
-            className="w-full bg-white text-gray-700 font-bold text-base rounded-2xl py-4 border border-gray-200 shadow-sm hover:bg-gray-50 transition-all flex items-center justify-center gap-2"
+            className="w-full text-gray-500 font-semibold text-sm py-2 hover:text-gray-800 transition-colors flex items-center justify-center gap-1.5"
           >
             Go to Home
             <ArrowRight className="w-4 h-4" />

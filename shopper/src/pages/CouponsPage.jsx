@@ -3,8 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Tag, Ticket, Copy, Check, ShoppingBag, Calendar } from 'lucide-react';
 import { Header } from '../components/Header';
 import { motion } from 'framer-motion';
-
-const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:5000/api';
+import api from '../utils/api';
 
 export function CouponsPage() {
   const [offers, setOffers] = useState([]);
@@ -15,9 +14,8 @@ export function CouponsPage() {
   const highlightId = searchParams.get('id');
 
   useEffect(() => {
-    fetch(`${BACKEND_URL}/offers/active`)
-      .then(r => r.json())
-      .then(d => setOffers(d.offers || []))
+    api.get('/offers/active')
+      .then(res => setOffers(res.data?.offers || []))
       .catch(() => {})
       .finally(() => setLoading(false));
   }, []);

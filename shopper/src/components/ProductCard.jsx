@@ -117,7 +117,14 @@ export function ProductCard({ product, layout = 'grid' }) {
   }
 
   const firstImg = getFirstImage(product, parsedSizes);
-  const displayPrice = defaultSize.price || product.price || 0;
+  const displayPrice = Number(defaultSize?.price ?? product?.price ?? 0);
+  const displayMrp = Number(defaultSize?.mrp ?? product?.mrp ?? displayPrice);
+  const discountPercent = defaultSize?.discount_percent !== undefined
+    ? Number(defaultSize.discount_percent)
+    : (product?.discount_percent !== undefined
+        ? Number(product.discount_percent)
+        : (displayMrp > displayPrice ? Math.round(((displayMrp - displayPrice) / displayMrp) * 100) : 0));
+  const hasDiscount = displayMrp > displayPrice && discountPercent > 0;
   // firstImg always returns a valid URL (category fallback if needed)
   // onError swaps to category fallback in case of network issues
   const fallbackImg = getCategoryFallback(product);
@@ -169,7 +176,9 @@ export function ProductCard({ product, layout = 'grid' }) {
           <div className="flex items-center justify-between mt-auto">
             <div className="flex items-center gap-2">
               <span className="text-base font-bold text-brand-navy">₹{displayPrice?.toLocaleString('en-IN')}</span>
-              <span className="text-xs text-gray-400 line-through">₹{Math.round(displayPrice * 1.4)?.toLocaleString('en-IN')}</span>
+              {hasDiscount && (
+                <span className="text-xs text-gray-400 line-through">₹{displayMrp?.toLocaleString('en-IN')}</span>
+              )}
             </div>
             <button onClick={isAdded ? (e) => { e.preventDefault(); e.stopPropagation(); navigate('/cart'); } : handleAddToCart}
               className={`${isAdded ? 'bg-green-600 hover:bg-green-700' : 'bg-brand-navy hover:bg-blue-900'} transition-colors p-2.5 rounded-xl relative z-20 active:scale-95`}>
@@ -195,9 +204,11 @@ export function ProductCard({ product, layout = 'grid' }) {
       className="group flex flex-col rounded-[1.5rem] md:rounded-[2rem] overflow-hidden cursor-pointer transition-all duration-300 hover:shadow-[0_8px_30px_rgba(0,0,0,0.08)] h-full relative bg-white border border-gray-100 pb-3">
 
       {/* Discount badge */}
-      <div className="absolute top-3 left-3 bg-brand-navy text-white text-[10px] md:text-xs font-bold px-2.5 py-1 rounded-full z-20 shadow-sm tracking-wide">
-        {(Math.round(((displayPrice * 1.4 - displayPrice) / (displayPrice * 1.4)) * 100))}% OFF
-      </div>
+      {hasDiscount && (
+        <div className="absolute top-3 left-3 bg-brand-navy text-white text-[10px] md:text-xs font-bold px-2.5 py-1 rounded-full z-20 shadow-sm tracking-wide">
+          {discountPercent}% OFF
+        </div>
+      )}
 
       {/* Wishlist */}
       <div className="absolute top-3 right-3 z-20">
@@ -229,7 +240,9 @@ export function ProductCard({ product, layout = 'grid' }) {
 
         <div className="flex items-end gap-2 mb-2">
           <span className="text-lg md:text-xl font-extrabold text-gray-900">₹{displayPrice?.toLocaleString('en-IN')}</span>
-          <span className="text-xs md:text-sm text-gray-400 line-through mb-0.5">₹{Math.round(displayPrice * 1.4)?.toLocaleString('en-IN')}</span>
+          {hasDiscount && (
+            <span className="text-xs md:text-sm text-gray-400 line-through mb-0.5">₹{displayMrp?.toLocaleString('en-IN')}</span>
+          )}
         </div>
 
 

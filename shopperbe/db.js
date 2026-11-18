@@ -1,13 +1,17 @@
 const { Pool } = require('pg');
 require('dotenv').config();
 
+const useSsl =
+  process.env.DB_SSL === 'true' ||
+  (process.env.DATABASE_URL || '').includes('sslmode=require');
+
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
-  ssl: { rejectUnauthorized: false },
+  ssl: useSsl ? { rejectUnauthorized: false } : false,
 });
 
 pool.connect()
-  .then(() => console.log('✅ Neon DB connected'))
+  .then(() => console.log('✅ PostgreSQL database connected'))
   .catch(err => console.error('❌ DB error:', err.message));
 
 pool.on('error', (err, client) => {

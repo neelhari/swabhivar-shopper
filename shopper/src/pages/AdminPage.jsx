@@ -96,16 +96,24 @@ export function AdminPage() {
     setUpdatingOrder(null);
   };
 
-  const filteredUsers = users.filter(u =>
-    u.name?.toLowerCase().includes(search.toLowerCase()) ||
-    u.email?.toLowerCase().includes(search.toLowerCase())
-  );
+  const filteredUsers = users.filter(u => {
+    if (!search) return true;
+    const term = search.toLowerCase();
+    return (
+      (u.name && String(u.name).toLowerCase().includes(term)) ||
+      (u.email && String(u.email).toLowerCase().includes(term))
+    );
+  });
 
-  const filteredOrders = orders.filter(o =>
-    o.order_number?.toLowerCase().includes(search.toLowerCase()) ||
-    o.user_name?.toLowerCase().includes(search.toLowerCase()) ||
-    o.user_email?.toLowerCase().includes(search.toLowerCase())
-  );
+  const filteredOrders = orders.filter(o => {
+    if (!search) return true;
+    const term = search.toLowerCase();
+    return (
+      (o.order_number && String(o.order_number).toLowerCase().includes(term)) ||
+      (o.user_name && String(o.user_name).toLowerCase().includes(term)) ||
+      (o.user_email && String(o.user_email).toLowerCase().includes(term))
+    );
+  });
 
   const tabs = [
     { id: 'dashboard', label: '📊 Dashboard' },

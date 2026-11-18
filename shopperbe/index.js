@@ -29,8 +29,9 @@ const path = require('path');
 
 app.use('/api/general', require('./routes/general'));
 app.use('/api/auth', require('./routes/auth'));
-app.use('/api/admin', require('./routes/admin'));
 app.use('/api/admin/upload', require('./routes/upload'));
+app.use('/api/upload', require('./routes/upload'));
+app.use('/api/admin', require('./routes/admin'));
 app.use('/api/vendorAuth', require('./routes/vendorAuth').router);
 app.use('/api/vendor', require('./routes/vendor'));
 app.use('/api/supportAuth', require('./routes/supportAuth').router);
@@ -39,6 +40,8 @@ app.use('/api/subscriptions', require('./routes/subscriptions'));
 app.use('/api/offers', require('./routes/offers'));
 app.use('/api/advertisements', require('./routes/advertisements'));
 app.use('/api/wallet', require('./routes/wallet'));
+app.use('/api/returns', require('./routes/returns'));
+app.use('/api/shipping', require('./routes/shipping'));
 app.use((req, res) => res.status(404).json({ error: 'API route not found' }));
 
 app.listen(PORT, () => console.log(`🚀 Server running on port ${PORT}`));

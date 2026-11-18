@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Search, Plus, PackageSearch, Edit2, Trash2, Clock, CheckCircle, XCircle, FileText } from 'lucide-react';
+import { Search, Plus, PackageSearch, Edit2, Trash2, Clock, CheckCircle, XCircle, FileText, Archive, AlertCircle, Info } from 'lucide-react';
 import { toast } from 'react-toastify';
 import { useNavigate } from 'react-router-dom';
 
@@ -9,7 +9,8 @@ const STATUS_CONFIG = {
   pending:  { label: 'Pending Review', icon: Clock,         cls: 'bg-amber-100 text-amber-700' },
   approved: { label: 'Live',           icon: CheckCircle,   cls: 'bg-green-100 text-green-700' },
   rejected: { label: 'Rejected',       icon: XCircle,       cls: 'bg-red-100 text-red-600' },
-  draft:    { label: 'Draft',          icon: FileText,       cls: 'bg-gray-100 text-gray-600' },
+  draft:    { label: 'Draft',          icon: FileText,      cls: 'bg-gray-100 text-gray-600' },
+  archived: { label: 'Archived',       icon: Archive,       cls: 'bg-purple-100 text-purple-700 border-purple-200' },
 };
 
 export function VendorProductsPage() {
@@ -19,16 +20,25 @@ export function VendorProductsPage() {
   const [searchTerm, setSearchTerm] = useState('');
   const [vendor, setVendor] = useState(null);
   const [subStats, setSubStats] = useState(null);
+  const [activeTab, setActiveTab] = useState('active'); // 'active' | 'archived'
+  const [activeCount, setActiveCount] = useState(0);
+  const [archivedCount, setArchivedCount] = useState(0);
 
-  const fetchProducts = async () => {
+  const fetchProducts = async (tab = activeTab) => {
     try {
+      setLoading(true);
       const token = localStorage.getItem('vendor_token');
-      const res = await fetch(`${BACKEND_URL}/vendor/products`, {
+      const url = tab === 'archived'
+        ? `${BACKEND_URL}/vendor/products?status=archived`
+        : `${BACKEND_URL}/vendor/products`;
+      const res = await fetch(url, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       const data = await res.json();
       if (res.ok) {
         setProducts(data.products || []);
+        if (data.activeCount !== undefined) setActiveCount(data.activeCount);
+        if (data.archivedCount !== undefined) setArchivedCount(data.archivedCount);
         if (data.subscriptionStats) setSubStats(data.subscriptionStats);
       }
     } catch { toast.error('Failed to load products'); }
@@ -45,7 +55,13 @@ export function VendorProductsPage() {
     } catch {}
   };
 
-  useEffect(() => { fetchProducts(); fetchProfile(); }, []);
+  useEffect(() => { 
+    fetchProfile(); 
+  }, []);
+
+  useEffect(() => {
+    fetchProducts(activeTab);
+  }, [activeTab]);
 
   const handleDelete = async (id) => {
     if (!confirm('Are you sure you want to delete this product?')) return;
@@ -54,14 +70,21 @@ export function VendorProductsPage() {
       const res = await fetch(`${BACKEND_URL}/vendor/products/${id}`, {
         method: 'DELETE', headers: { 'Authorization': `Bearer ${token}` }
       });
-      if (res.ok) { toast.success('Product deleted'); fetchProducts(); }
+      if (res.ok) { 
+        toast.success('Product deleted'); 
+        fetchProducts(activeTab); 
+      }
     } catch { toast.error('Failed to delete'); }
   };
 
-  const filteredProducts = products.filter(p =>
-    p.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    p.category?.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const filteredProducts = products.filter(p => {
+    if (!searchTerm) return true;
+    const term = searchTerm.toLowerCase();
+    return (
+      (p.name && String(p.name).toLowerCase().includes(term)) ||
+      (p.category && String(p.category).toLowerCase().includes(term))
+    );
+  });
 
   let canAddProduct = true;
   let limitMessage = '';
@@ -89,14 +112,14 @@ export function VendorProductsPage() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-6 mb-8">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-6 mb-4">
         <div>
-          <h1 className="text-3xl font-extrabold text-gray-900 tracking-tight">My Products</h1>
-          <div className="flex flex-wrap items-center gap-3 mt-2">
+          <h1 className="text-2xl sm:text-3xl font-extrabold text-gray-900 tracking-tight">My Products</h1>
+          <div className="flex flex-wrap items-center gap-2 sm:gap-3 mt-2">
             <span className="text-xs font-bold text-gray-700 bg-white px-3 py-1 rounded-full border border-gray-200 shadow-sm">
-              {products.length} Added
+              {activeTab === 'active' ? `${activeCount} Active` : `${archivedCount} Archived`}
             </span>
-            {subStats && (
+            {subStats && activeTab === 'active' && (
               <span className={`text-xs font-bold px-3 py-1 rounded-full border shadow-sm ${
                 subStats.isUnlimited 
                   ? 'text-green-700 bg-green-50 border-green-200' 
@@ -109,7 +132,7 @@ export function VendorProductsPage() {
             )}
           </div>
         </div>
-        <div className="flex flex-col sm:flex-row gap-4 items-center w-full sm:w-auto">
+        <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 items-center w-full sm:w-auto">
           <div className="relative w-full sm:w-64">
             <Search className="w-5 h-5 absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
             <input
@@ -117,22 +140,71 @@ export function VendorProductsPage() {
               placeholder="Search products..."
               value={searchTerm}
               onChange={e => setSearchTerm(e.target.value)}
-              className="pl-12 pr-4 py-3 bg-white border border-gray-200 rounded-[16px] focus:outline-none focus:ring-2 focus:ring-[#012980]/50 focus:border-[#012980] w-full text-sm font-medium shadow-[0_4px_20px_rgb(0,0,0,0.03)] transition-all"
+              className="pl-12 pr-4 py-2.5 sm:py-3 bg-white border border-gray-200 rounded-[16px] focus:outline-none focus:ring-2 focus:ring-[#012980]/50 focus:border-[#012980] w-full text-sm font-medium shadow-[0_4px_20px_rgb(0,0,0,0.03)] transition-all"
             />
           </div>
-          <div className="flex flex-col items-end gap-1 w-full sm:w-auto">
-            <button
-              onClick={() => navigate('/vendor/products/new')}
-              disabled={!canAddProduct}
-              title={limitMessage}
-              className="w-full sm:w-auto bg-gradient-to-r from-[#012980] to-[#ff7b23] text-white px-5 py-3 rounded-[16px] text-sm font-bold hover:shadow-[0_8px_20px_rgba(254,102,3,0.3)] hover:-translate-y-0.5 transition-all flex items-center justify-center gap-2 whitespace-nowrap disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:transform-none disabled:hover:shadow-none"
-            >
-              <Plus className="w-5 h-5" /> Add Product
-            </button>
-            {!canAddProduct && <span className="text-xs text-red-500 font-bold px-2">{limitMessage}</span>}
-          </div>
+          {activeTab === 'active' && (
+            <div className="flex flex-col items-end gap-1 w-full sm:w-auto">
+              <button
+                onClick={() => navigate('/vendor/products/new')}
+                disabled={!canAddProduct}
+                title={limitMessage}
+                className="w-full sm:w-auto bg-gradient-to-r from-[#012980] to-[#ff7b23] text-white px-5 py-2.5 sm:py-3 rounded-[16px] text-sm font-bold hover:shadow-[0_8px_20px_rgba(254,102,3,0.3)] hover:-translate-y-0.5 transition-all flex items-center justify-center gap-2 whitespace-nowrap disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:transform-none disabled:hover:shadow-none"
+              >
+                <Plus className="w-5 h-5" /> Add Product
+              </button>
+              {!canAddProduct && <span className="text-xs text-red-500 font-bold px-2">{limitMessage}</span>}
+            </div>
+          )}
         </div>
       </div>
+
+      {/* Tabs */}
+      <div className="flex items-center gap-2 border-b border-gray-200 pb-2 overflow-x-auto">
+        <button
+          onClick={() => setActiveTab('active')}
+          className={`flex items-center gap-2 px-4 py-2 text-sm font-bold rounded-xl transition-all whitespace-nowrap ${
+            activeTab === 'active'
+              ? 'bg-[#012980] text-white shadow-sm'
+              : 'text-gray-600 hover:bg-gray-100'
+          }`}
+        >
+          Active Products
+          <span className={`text-xs px-2 py-0.5 rounded-full ${
+            activeTab === 'active' ? 'bg-white/20 text-white' : 'bg-gray-200 text-gray-700'
+          }`}>
+            {activeCount}
+          </span>
+        </button>
+        <button
+          onClick={() => setActiveTab('archived')}
+          className={`flex items-center gap-2 px-4 py-2 text-sm font-bold rounded-xl transition-all whitespace-nowrap ${
+            activeTab === 'archived'
+              ? 'bg-[#012980] text-white shadow-sm'
+              : 'text-gray-600 hover:bg-gray-100'
+          }`}
+        >
+          <Archive className="w-4 h-4" />
+          Archived Products
+          <span className={`text-xs px-2 py-0.5 rounded-full ${
+            activeTab === 'archived' ? 'bg-white/20 text-white' : 'bg-gray-200 text-gray-700'
+          }`}>
+            {archivedCount}
+          </span>
+        </button>
+      </div>
+
+      {activeTab === 'archived' && (
+        <div className="p-4 bg-purple-50 border border-purple-200 rounded-2xl flex items-start gap-3 text-sm text-purple-900">
+          <Info className="w-5 h-5 text-purple-600 shrink-0 mt-0.5" />
+          <div>
+            <p className="font-bold">Archived Category Products</p>
+            <p className="text-purple-700 mt-0.5 text-xs sm:text-sm">
+              These products belong to categories you removed or replaced. They are preserved for order records and invoices, but are automatically hidden from customer search and marketplace listings.
+            </p>
+          </div>
+        </div>
+      )}
 
       {/* Grid */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
@@ -181,18 +253,26 @@ export function VendorProductsPage() {
 
               {/* Actions */}
               <div className="px-5 py-4 bg-gray-50/50 border-t border-gray-100 flex gap-3">
-                <button
-                  onClick={() => navigate(`/vendor/products/${product.id}/edit`)}
-                  className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-bold text-gray-700 bg-white border border-gray-200 rounded-[12px] hover:bg-gray-50 hover:border-gray-300 hover:text-[#012980] transition-all"
-                >
-                  <Edit2 className="w-4 h-4" /> Edit
-                </button>
-                <button
-                  onClick={() => handleDelete(product.id)}
-                  className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-bold text-red-500 bg-white border border-red-100 rounded-[12px] hover:bg-red-500 hover:text-white transition-all shadow-sm"
-                >
-                  <Trash2 className="w-4 h-4" /> Delete
-                </button>
+                {status === 'archived' ? (
+                  <span className="w-full text-center py-2.5 text-xs font-bold text-purple-700 bg-purple-50 rounded-[12px] border border-purple-200 flex items-center justify-center gap-1.5">
+                    <Archive className="w-3.5 h-3.5" /> Archived (Category Removed)
+                  </span>
+                ) : (
+                  <>
+                    <button
+                      onClick={() => navigate(`/vendor/products/${product.id}/edit`)}
+                      className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-bold text-gray-700 bg-white border border-gray-200 rounded-[12px] hover:bg-gray-50 hover:border-gray-300 hover:text-[#012980] transition-all"
+                    >
+                      <Edit2 className="w-4 h-4" /> Edit
+                    </button>
+                    <button
+                      onClick={() => handleDelete(product.id)}
+                      className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-bold text-red-500 bg-white border border-red-100 rounded-[12px] hover:bg-red-500 hover:text-white transition-all shadow-sm"
+                    >
+                      <Trash2 className="w-4 h-4" /> Delete
+                    </button>
+                  </>
+                )}
               </div>
             </div>
           );

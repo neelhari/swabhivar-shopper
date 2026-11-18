@@ -50,7 +50,10 @@ export default function StoreProfilePage() {
     );
   }
 
-  const filteredProducts = products.filter(p => p.name.toLowerCase().includes(search.toLowerCase()));
+  const filteredProducts = products.filter(p => {
+    if (!search) return true;
+    return p.name && String(p.name).toLowerCase().includes(search.toLowerCase());
+  });
 
   return (
     <div className="min-h-screen bg-gray-50 pb-20">

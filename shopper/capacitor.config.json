@@ -1,0 +1,8 @@
+{
+  "appId": "com.swabhivar.shoppers",
+  "appName": "Swabhivar Shoppers",
+  "webDir": "dist",
+  "server": {
+    "androidScheme": "https"
+  }
+}

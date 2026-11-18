@@ -12,9 +12,9 @@ import { useCartStore } from '../store/useCartStore';
 import { useAuthStore } from '../store/useAuthStore';
 import { useWishlistStore } from '../store/useWishlistStore';
 import { useStoreData } from '../store/useStoreData';
+import { registerModal } from '../utils/backNavigation';
+import api from '../utils/api';
 import logo from '../assets/logo.png';
-
-const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:5000/api';
 
 function AvatarDropdown({ user, onLogout }) {
   const [open, setOpen] = useState(false);
@@ -111,9 +111,8 @@ function OffersDropdown() {
   const navigate = useNavigate();
 
   useEffect(() => {
-    fetch(`${BACKEND_URL}/offers/active`)
-      .then(r => r.json())
-      .then(d => setOffers(d.offers || []))
+    api.get('/offers/active')
+      .then(res => setOffers(res.data?.offers || []))
       .catch(() => { });
   }, []);
 
@@ -158,7 +157,10 @@ function DesktopFullHeader({ cartCount, wishlistCount, token, user, handleLogout
   const { products } = useStoreData();
   const [productQuery, setProductQuery] = useState('');
   
-  const productResults = productQuery ? products.filter(p => p.name.toLowerCase().includes(productQuery.toLowerCase()) || p.category.toLowerCase().includes(productQuery.toLowerCase())).slice(0, 5) : [];
+  const productResults = productQuery ? products.filter(p => 
+    (p.name && String(p.name).toLowerCase().includes(productQuery.toLowerCase())) || 
+    (p.category && String(p.category).toLowerCase().includes(productQuery.toLowerCase()))
+  ).slice(0, 5) : [];
 
   return (
     <>
@@ -268,7 +270,13 @@ function DesktopFullHeader({ cartCount, wishlistCount, token, user, handleLogout
 }
 
 export function Header({ variant = 'default', title, showShare = false }) {
+  const location = useLocation();
+  if (location.pathname !== '/') {
+    return null;
+  }
+
   const navigate = useNavigate();
+  const isHome = variant === 'home';
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [mobileCatsOpen, setMobileCatsOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false); // slide-out drawer for home header
@@ -277,11 +285,19 @@ export function Header({ variant = 'default', title, showShare = false }) {
   const [offers, setOffers] = useState([]);
   
   useEffect(() => {
-    fetch(`${import.meta.env.VITE_BACKEND_URL || 'http://localhost:5000/api'}/offers/active`)
-      .then(r => r.json())
-      .then(d => setOffers(d.offers || []))
+    api.get('/offers/active')
+      .then(res => setOffers(res.data?.offers || []))
       .catch(() => { });
   }, []);
+
+  // Close open drawer when back action occurs
+  useEffect(() => {
+    if (!menuOpen && !mobileMenuOpen) return;
+    return registerModal(() => {
+      setMenuOpen(false);
+      setMobileMenuOpen(false);
+    });
+  }, [menuOpen, mobileMenuOpen]);
 
   const categories = useStoreData(s => s.categories);
   const cartItems = useCartStore((state) => state.items);
@@ -394,8 +410,8 @@ export function Header({ variant = 'default', title, showShare = false }) {
           )}
         </AnimatePresence>
 
-        <div className="h-[105px]" />
-        <header className="fixed top-0 left-0 z-50 w-full bg-white shadow-sm flex flex-col">
+        {!isHome && <div className="h-[105px]" />}
+        <header className={`${isHome ? 'relative' : 'fixed top-0 left-0 z-50'} w-full bg-white shadow-sm flex flex-col`}>
           {/* Top Row: Location & Refer */}
           <div className="w-full bg-[#0b162c]">
             <div className="flex items-center justify-between px-4 py-2.5 max-w-lg mx-auto">
@@ -411,13 +427,10 @@ export function Header({ variant = 'default', title, showShare = false }) {
           </div>
 
           {/* Logo and Actions Row */}
-          <div className="w-full relative bg-white">
+          <div className="w-full relative bg-white border-b border-gray-100">
             <div className="max-w-lg mx-auto flex items-center justify-between relative">
-              {/* Dark extension for actions (rounded bottom-left) */}
-              <div className="absolute top-0 right-0 w-[65%] h-full bg-[#0b162c] rounded-bl-[2.5rem] z-0"></div>
-              
               {/* Logo Area */}
-              <div className="flex-1 pl-3 pr-6 py-2 z-10 relative">
+              <div className="flex-1 pl-3 pr-4 py-2 z-10 relative">
                 <Link to="/">
                   <img src={logo} alt="Logo" className="h-16 sm:h-20 w-auto object-contain filter drop-shadow-sm" />
                 </Link>
@@ -426,19 +439,19 @@ export function Header({ variant = 'default', title, showShare = false }) {
               {/* Actions Area */}
               <div className="flex items-center gap-2 sm:gap-2.5 px-3 py-3 shrink-0 z-10 relative">
                 {/* Wallet */}
-                <Link to="/wallet" className="flex items-center gap-1.5 px-3 py-1.5 bg-transparent border border-white/20 rounded-full hover:bg-white/5 transition-colors">
+                <Link to="/wallet" className="flex items-center gap-1.5 px-3 py-1.5 bg-gray-50 border border-gray-200 rounded-full hover:bg-gray-100 transition-colors">
                   <Wallet className="w-4 h-4 text-[#f36b21]" strokeWidth={2} />
-                  <span className="text-white text-xs sm:text-sm font-bold">₹{user?.wallet_balance || 0}</span>
+                  <span className="text-[#0b162c] text-xs sm:text-sm font-bold">₹{user?.wallet_balance || 0}</span>
                 </Link>
 
                 {/* Cart icon */}
                 <button
                   onClick={() => navigate('/cart')}
-                  className="relative p-2 rounded-full border border-white/20 hover:bg-white/5 transition-colors"
+                  className="relative p-2 rounded-full border border-gray-200 bg-gray-50 hover:bg-gray-100 transition-colors"
                 >
-                  <ShoppingCart className="w-4 h-4 text-white" />
+                  <ShoppingCart className="w-4 h-4 text-[#0b162c]" />
                   {cartCount > 0 && (
-                    <span className="absolute -top-1 -right-1 w-4 h-4 bg-brand-navy rounded-full text-white text-[9px] font-black flex items-center justify-center">
+                    <span className="absolute -top-1 -right-1 w-4 h-4 bg-[#f36b21] rounded-full text-white text-[9px] font-black flex items-center justify-center">
                       {cartCount > 9 ? '9+' : cartCount}
                     </span>
                   )}
@@ -447,17 +460,17 @@ export function Header({ variant = 'default', title, showShare = false }) {
                 {/* Search button */}
                 <button
                   onClick={() => setMobileSearchOpen(!mobileSearchOpen)}
-                  className="relative p-2 rounded-full border border-white/20 hover:bg-white/5 transition-colors"
+                  className="relative p-2 rounded-full border border-gray-200 bg-gray-50 hover:bg-gray-100 transition-colors"
                 >
-                  <Search className="w-4 h-4 text-white" />
+                  <Search className="w-4 h-4 text-[#0b162c]" />
                 </button>
 
                 {/* Menu button */}
                 <button
                   onClick={() => setMenuOpen(true)}
-                  className="relative p-2 rounded-full border border-white/20 hover:bg-white/5 transition-colors"
+                  className="relative p-2 rounded-full border border-gray-200 bg-gray-50 hover:bg-gray-100 transition-colors"
                 >
-                  <Menu className="w-4 h-4 text-white" />
+                  <Menu className="w-4 h-4 text-[#0b162c]" />
                 </button>
               </div>
             </div>
@@ -470,10 +483,10 @@ export function Header({ variant = 'default', title, showShare = false }) {
                 initial={{ height: 0, opacity: 0 }}
                 animate={{ height: 'auto', opacity: 1 }}
                 exit={{ height: 0, opacity: 0 }}
-                className="w-full bg-[#0b162c] px-4 pb-3 overflow-hidden"
+                className="w-full bg-white border-t border-gray-100 px-4 pb-3 pt-1 overflow-hidden shadow-sm"
               >
                 <div className="relative w-full max-w-lg mx-auto">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-white/50" />
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
                   <input
                     type="text"
                     placeholder="Search products..."
@@ -484,7 +497,7 @@ export function Header({ variant = 'default', title, showShare = false }) {
                         navigate(`/category/all?search=${encodeURIComponent(e.target.value.trim())}`);
                       }
                     }}
-                    className="w-full bg-white/10 border border-white/20 rounded-full py-2 pl-9 pr-4 text-sm text-white placeholder-white/50 focus:outline-none focus:border-white/40 focus:bg-white/20 transition-all"
+                    className="w-full bg-gray-50 border border-gray-200 rounded-full py-2 pl-9 pr-4 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:border-[#0b162c] focus:bg-white transition-all"
                   />
                 </div>
               </motion.div>
@@ -574,7 +587,6 @@ export function Header({ variant = 'default', title, showShare = false }) {
                   { icon: <ShoppingCart className="w-4.5 h-4.5" />, label: 'Cart', path: '/cart', color: 'text-green-400', badge: cartCount > 0 ? cartCount : null },
                   { icon: <MapPin className="w-4.5 h-4.5" />, label: 'My Addresses', path: token ? '/my-addresses' : '/login', color: 'text-indigo-400' },
                   { icon: <User className="w-4.5 h-4.5" />, label: 'My Profile', path: token ? '/profile' : '/login', color: 'text-brand-navy' },
-                  { icon: <Gift className="w-4.5 h-4.5" />, label: 'Refer by A 501', path: '/refer', color: 'text-pink-400' },
                 ].map(item => {
                   if (item.isAccordion && item.id === 'offers') {
                     return (

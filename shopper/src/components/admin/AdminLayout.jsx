@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { useNavigate, useLocation, Link } from "react-router-dom";
-import { LayoutDashboard, ShoppingBag, Package, BarChart3, LogOut, Shield, Users, Menu, X, ImageIcon, Tag, Layers, UserPlus, UserCircle, Wallet, Store, HeadphonesIcon, CreditCard, Percent, Megaphone, ClipboardList, Banknote } from "lucide-react";
+import { LayoutDashboard, ShoppingBag, Package, BarChart3, LogOut, Shield, Users, Menu, X, ImageIcon, Tag, Layers, UserPlus, UserCircle, Wallet, Store, HeadphonesIcon, CreditCard, Percent, Megaphone, ClipboardList, Banknote, RotateCcw, Settings } from "lucide-react";
 import logo from '../../assets/logo.png';
 
 const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || "http://localhost:5000/api";
@@ -8,6 +8,7 @@ const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || "http://localhost:5000/a
 const NAV = [
   { href: "/admin", label: "Dashboard", icon: <LayoutDashboard className="w-4 h-4" /> },
   { href: "/admin/orders", label: "Orders", icon: <ShoppingBag className="w-4 h-4" /> },
+  { href: "/admin/returns", label: "Returns & Refunds", icon: <RotateCcw className="w-4 h-4" /> },
   { href: "/admin/customers", label: "Customers", icon: <Users className="w-4 h-4" /> },
   { href: "/admin/products", label: "Products", icon: <Package className="w-4 h-4" /> },
   { href: "/admin/categories", label: "Categories", icon: <Layers className="w-4 h-4" /> },
@@ -25,6 +26,7 @@ const NAV = [
   { href: "/admin/offers", label: "Offers", icon: <Percent className="w-4 h-4" /> },
   { href: "/admin/advertisements", label: "Advertisements", icon: <Megaphone className="w-4 h-4" /> },
   { href: "/admin/product-requests", label: "Product Requests", icon: <ClipboardList className="w-4 h-4" /> },
+  { href: "/admin/settings", label: "Settings", icon: <Settings className="w-4 h-4" /> },
 ];
 
 export function AdminLayout({ children }) {
@@ -35,26 +37,27 @@ export function AdminLayout({ children }) {
   const [mobileOpen, setMobileOpen] = useState(false);
 
   useEffect(() => {
-    // For now, mock admin data if no actual auth is setup to avoid blocking
     const token = localStorage.getItem("token");
     if (!token) {
-      // Mocking admin login for demo purposes based on requirements
-      setAdmin({ name: "Admin User", email: "admin@swabhivarshoppers.com" });
+      navigate("/admin-login", { replace: true });
       return;
     }
 
     fetch(`${BACKEND_URL}/auth/me`, { headers: { Authorization: `Bearer ${token}` } })
       .then((r) => r.json())
       .then((d) => {
-        if (!d.user || d.user.role !== "admin") { navigate("/"); return; }
+        if (!d.user || d.user.role !== "admin") {
+          navigate("/admin-login", { replace: true });
+          return;
+        }
         setAdmin(d.user);
       })
-      .catch(() => navigate("/login"));
+      .catch(() => navigate("/admin-login", { replace: true }));
   }, [navigate]);
 
   const handleLogout = () => {
     localStorage.removeItem("token");
-    navigate("/login");
+    navigate("/admin-login");
   };
 
   if (!admin) return (

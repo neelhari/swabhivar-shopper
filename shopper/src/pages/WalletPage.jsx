@@ -1,9 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { toast } from 'react-toastify';
-import { Wallet, ArrowUpRight, ArrowDownLeft, Clock, CreditCard, ShieldCheck, History, X, Plus, Share2 } from 'lucide-react';
+import { Wallet, ArrowUpRight, ArrowDownLeft, Clock, CreditCard, ShieldCheck, History, X, Plus, Share2, ChevronRight, ChevronLeft } from 'lucide-react';
 import { useAuthStore } from '../store/useAuthStore';
+import { registerModal, navigateBackSafe } from '../utils/backNavigation';
 import api from '../utils/api';
+import { ShareReferralModal } from '../components/referral/ShareReferralModal';
 
 export function WalletPage() {
   const navigate = useNavigate();
@@ -25,11 +27,22 @@ export function WalletPage() {
   });
   
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [shareModalOpen, setShareModalOpen] = useState(false);
 
   useEffect(() => {
     fetchProfile();
     fetchData();
   }, []);
+
+  // Close open wallet modals on back action
+  useEffect(() => {
+    if (!showRedeemModal && !showAddBank && !shareModalOpen) return;
+    return registerModal(() => {
+      setShowRedeemModal(false);
+      setShowAddBank(false);
+      setShareModalOpen(false);
+    });
+  }, [showRedeemModal, showAddBank, shareModalOpen]);
 
   const fetchData = async () => {
     try {
@@ -98,6 +111,13 @@ export function WalletPage() {
   return (
     <div className="min-h-screen bg-gray-50 pb-20 pt-4 px-4 md:px-8 max-w-[800px] mx-auto">
       <div className="flex items-center gap-3 mb-6">
+        <button
+          onClick={() => navigateBackSafe(navigate, '/')}
+          className="p-2 -ml-2 text-gray-700 hover:text-gray-900 hover:bg-gray-200/60 rounded-full transition-colors border border-gray-200 bg-white shadow-xs"
+          aria-label="Back"
+        >
+          <ChevronLeft className="w-5 h-5" />
+        </button>
         <div className="w-12 h-12 rounded-full bg-blue-50 border border-brand-navy/20 flex items-center justify-center shadow-sm">
           <Wallet className="w-6 h-6 text-brand-navy" />
         </div>
@@ -138,39 +158,37 @@ export function WalletPage() {
           <h3 className="text-xl font-bold text-[#0b162c] mb-2 font-serif">Refer & Earn 1% Commission</h3>
           <p className="text-sm text-gray-600 mb-6 max-w-md">Share your unique referral code with friends. When they sign up and place an order, <span className="font-bold text-brand-navy">1% of their order value</span> will be instantly added to your wallet!</p>
           
-          <div className="bg-white p-4 rounded-2xl border border-gray-200 inline-flex items-center gap-4 shadow-sm">
-            <div>
-              <p className="text-xs font-semibold text-gray-500 uppercase mb-1">Your Referral Code</p>
-              <p className="text-2xl font-extrabold text-brand-navy tracking-wider">{user?.referral_code || 'COMINGSOON'}</p>
+          <div className="bg-white p-4 sm:p-5 rounded-2xl border border-gray-200 flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-sm w-full max-w-md">
+            <div className="min-w-0">
+              <p className="text-[11px] sm:text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Your Referral Code</p>
+              <p className="text-xl sm:text-2xl font-extrabold text-brand-navy tracking-wider truncate select-all">{user?.referral_code || 'COMINGSOON'}</p>
             </div>
-            <div className="flex gap-2">
+            <div className="flex items-center gap-2 w-full sm:w-auto">
               <button 
                 onClick={() => {
                   navigator.clipboard.writeText(user?.referral_code || 'COMINGSOON');
                   toast.success("Referral code copied!");
                 }}
-                className="bg-brand-navy hover:bg-blue-900 text-white px-5 py-2.5 rounded-xl text-sm font-bold transition-colors"
+                className="flex-1 sm:flex-none bg-brand-navy hover:bg-blue-900 text-white px-4 py-2.5 rounded-xl text-xs sm:text-sm font-bold transition-all whitespace-nowrap shadow-sm active:scale-95 text-center"
               >
                 Copy Code
               </button>
               <button 
-                onClick={() => {
-                  const code = user?.referral_code || 'COMINGSOON';
-                  const text = `Use my referral code ${code} to sign up and get rewards!`;
-                  if (navigator.share) {
-                    navigator.share({ title: 'Referral Code', text }).catch(() => {});
-                  } else {
-                    navigator.clipboard.writeText(text);
-                    toast.success("Share text copied!");
-                  }
-                }}
-                className="bg-blue-50 hover:bg-blue-100 text-brand-navy px-4 py-2.5 rounded-xl text-sm font-bold transition-colors flex items-center justify-center border border-blue-200"
+                onClick={() => setShareModalOpen(true)}
+                className="bg-blue-50 hover:bg-blue-100 text-brand-navy p-2.5 rounded-xl font-bold transition-all flex items-center justify-center border border-blue-200 shrink-0 shadow-sm active:scale-95"
                 title="Share Code"
               >
-                <Share2 className="w-5 h-5" />
+                <Share2 className="w-4 h-4 sm:w-5 sm:h-5" />
               </button>
             </div>
           </div>
+          <Link 
+            to="/refer"
+            className="inline-flex items-center gap-1.5 text-xs font-bold text-brand-navy hover:text-blue-900 transition-colors mt-3.5 group"
+          >
+            <span>View Full Referral Program & Reward Audit</span>
+            <ChevronRight className="w-3.5 h-3.5 group-hover:translate-x-0.5 transition-transform" />
+          </Link>
         </div>
       </div>
 
@@ -326,6 +344,12 @@ export function WalletPage() {
           </div>
         </div>
       )}
+      {/* SHARE REFERRAL MODAL */}
+      <ShareReferralModal
+        isOpen={shareModalOpen}
+        onClose={() => setShareModalOpen(false)}
+        referralCode={user?.referral_code}
+      />
     </div>
   );
 }

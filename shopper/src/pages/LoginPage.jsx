@@ -189,7 +189,7 @@ export function LoginPage() {
               <form onSubmit={handleSubmit} className="space-y-4">
                 <div className="relative">
                   <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
-                  <input name="email" type="email" value={form.email} onChange={handleChange} required placeholder="Email address" className={inputClass} />
+                  <input name="email" type="text" value={form.email} onChange={handleChange} required placeholder="Mobile number or Email address" className={inputClass} />
                 </div>
                 <div className="relative">
                   <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />

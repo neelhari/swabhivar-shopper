@@ -46,9 +46,11 @@ export function AdminProductsPage() {
   };
 
   const filtered = products.filter(p => {
-    const matchSearch = p.name?.toLowerCase().includes(search.toLowerCase()) ||
-      p.category?.toLowerCase().includes(search.toLowerCase()) ||
-      p.brand?.toLowerCase().includes(search.toLowerCase());
+    const term = (search || '').trim().toLowerCase();
+    const matchSearch = !term ||
+      (p.name && String(p.name).toLowerCase().includes(term)) ||
+      (p.category && String(p.category).toLowerCase().includes(term)) ||
+      (p.brand && String(p.brand).toLowerCase().includes(term));
     const matchStatus = filterStatus === "all" || p.status === filterStatus;
     return matchSearch && matchStatus;
   });

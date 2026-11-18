@@ -6,6 +6,7 @@ import {
   Star, TrendingUp, Tag, CheckCircle
 } from 'lucide-react';
 import { toast } from 'react-toastify';
+import { useStoreData } from '../../store/useStoreData';
 
 const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:5000/api';
 
@@ -79,9 +80,8 @@ export function AdminProductFormPage() {
     seo_title: '', seo_keywords: '', meta_description: '', search_tags: [],
     warranty: '', return_policy: '', replacement_policy: '', refund_available: false,
     user_manual_url: '', brochure_url: '', certificate_urls: [],
-    pickup_location: '', warehouse: '', available_cities: '',
     manufacturer_name: '', country_of_origin: '', hsn_code: '',
-    gst_number: '', shop_name: '', shop_location: '',
+    gst_number: '',
     // Admin controls
     is_active: true, is_bestseller: false, is_trending: false, is_offer: false, status: 'approved',
     custom_attributes: {},
@@ -117,19 +117,19 @@ export function AdminProductFormPage() {
       setForm(prev => ({
         ...prev, ...product,
         gender: product.gender || 'Any',
+        weight: product.weight || attrs.shipping_weight || attrs.weight || '',
+        shipping_weight: product.weight || attrs.shipping_weight || attrs.weight || '',
+        length: product.length || attrs.length || '',
+        width: product.width || attrs.width || '',
+        height: product.height || attrs.height || '',
         images: Array.isArray(product.images) ? product.images : [],
         search_tags: attrs.search_tags || [],
         certificate_urls: attrs.certificate_urls || [],
         user_manual_url: attrs.user_manual_url || '',
         brochure_url: attrs.brochure_url || '',
-        pickup_location: attrs.pickup_location || '',
-        warehouse: attrs.warehouse || '',
-        available_cities: attrs.available_cities || '',
         manufacturer_name: attrs.manufacturer_name || '',
         country_of_origin: attrs.country_of_origin || '',
         gst_number: attrs.gst_number || '',
-        shop_name: attrs.shop_name || '',
-        shop_location: attrs.shop_location || '',
         product_code: attrs.product_code || '',
         product_type: attrs.product_type || 'Physical',
         condition: attrs.condition || 'New',
@@ -137,7 +137,6 @@ export function AdminProductFormPage() {
         seo_keywords: attrs.seo_keywords || '',
         meta_description: attrs.meta_description || '',
         refund_available: attrs.refund_available || false,
-        shipping_weight: attrs.shipping_weight || '',
         custom_attributes: attrs,
       }));
       const cat = (cats || []).find(c => c.name === product.category);
@@ -163,10 +162,12 @@ export function AdminProductFormPage() {
   const uploadFile = async (file) => {
     const fd = new FormData();
     fd.append('image', file);
-    const res = await fetch(`${BACKEND_URL}/admin/upload`, {
+    fd.append('folder', 'products');
+    const res = await fetch(`${BACKEND_URL}/upload`, {
       method: 'POST', headers, body: fd
     });
     const data = await res.json();
+    if (!res.ok) throw new Error(data.error || data.message || 'Upload failed');
     return data.url;
   };
 
@@ -220,12 +221,26 @@ export function AdminProductFormPage() {
     if (!form.stock) newErrors.stock = true;
     if (!form.description) newErrors.description = true;
 
+    const pWeight = parseFloat(form.shipping_weight || form.weight || 0);
+    const pLen = parseFloat(form.length || 0);
+    const pWid = parseFloat(form.width || 0);
+    const pHgt = parseFloat(form.height || 0);
+
+    if (!pWeight || pWeight <= 0) newErrors.shipping_weight = true;
+    if (!pLen || pLen <= 0) newErrors.length = true;
+    if (!pWid || pWid <= 0) newErrors.width = true;
+    if (!pHgt || pHgt <= 0) newErrors.height = true;
+
     if (Object.keys(newErrors).length > 0) {
       setErrors(newErrors);
-      toast.error('Please fill in all required fields');
-      
-      if (newErrors.name || newErrors.category || newErrors.description) setActiveTab('basic');
-      else if (newErrors.price || newErrors.mrp || newErrors.stock) setActiveTab('pricing');
+      if (newErrors.shipping_weight || newErrors.length || newErrors.width || newErrors.height) {
+        toast.error('Please enter valid package dimensions (Length, Width, Height) and estimated packed weight.');
+        setActiveTab('shipping');
+      } else {
+        toast.error('Please fill in all required fields');
+        if (newErrors.name || newErrors.category || newErrors.description) setActiveTab('basic');
+        else if (newErrors.price || newErrors.mrp || newErrors.stock) setActiveTab('pricing');
+      }
       return;
     }
     setErrors({});
@@ -235,21 +250,23 @@ export function AdminProductFormPage() {
       const extraAttrs = {
         ...form.custom_attributes,
         user_manual_url: form.user_manual_url, brochure_url: form.brochure_url,
-        certificate_urls: form.certificate_urls, pickup_location: form.pickup_location,
-        warehouse: form.warehouse, available_cities: form.available_cities,
+        certificate_urls: form.certificate_urls,
         manufacturer_name: form.manufacturer_name, country_of_origin: form.country_of_origin,
         hsn_code: form.hsn_code,
-        gst_number: form.gst_number, shop_name: form.shop_name, shop_location: form.shop_location,
+        gst_number: form.gst_number,
         product_code: form.product_code, product_type: form.product_type,
         condition: form.condition, seo_title: form.seo_title,
         seo_keywords: form.seo_keywords, meta_description: form.meta_description,
         search_tags: form.search_tags, refund_available: form.refund_available,
-        shipping_weight: form.shipping_weight,
+        shipping_weight: String(pWeight),
+        length: String(pLen),
+        width: String(pWid),
+        height: String(pHgt),
       };
 
       const body = {
         name: form.name,
-        slug: form.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, ''),
+        slug: (form.name || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, ''),
         sku: form.sku, barcode: form.barcode, brand: form.brand, gender: form.gender,
         category: form.category, subcategory: form.subcategory,
         short_description: form.short_description, description: form.description,
@@ -265,7 +282,7 @@ export function AdminProductFormPage() {
         max_order_qty: parseInt(form.max_order_qty) || null,
         low_stock_alert: parseInt(form.low_stock_alert) || null,
         cod_available: form.cod_available, free_shipping: form.free_shipping,
-        weight: form.weight, length: form.length, width: form.width, height: form.height,
+        weight: String(pWeight), length: String(pLen), width: String(pWid), height: String(pHgt),
         material: form.material, hsn_code: form.hsn_code,
         warranty: form.warranty, return_policy: form.return_policy,
         replacement_policy: form.replacement_policy,
@@ -286,6 +303,10 @@ export function AdminProductFormPage() {
       });
       const resData = await res.json();
       if (!res.ok) { toast.error(resData.error || 'Save failed'); return; }
+      if (resData.product) {
+        useStoreData.getState().updateProductInStore(resData.product);
+        useStoreData.getState().refreshProducts();
+      }
       toast.success(isEdit ? '✅ Product updated!' : '✅ Product created!');
       navigate('/admin/products');
     } catch { toast.error('An error occurred'); }
@@ -408,20 +429,62 @@ export function AdminProductFormPage() {
         </div>
       );
 
-      case 'shipping': return (
-        <div className="space-y-5">
-          <Section title="Physical Dimensions">
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-              <Field label="Weight (kg)"><Input value={form.weight} onChange={e => set('weight', e.target.value)} placeholder="0.5" /></Field>
-              <Field label="Shipping Weight (kg)"><Input value={form.shipping_weight} onChange={e => set('shipping_weight', e.target.value)} placeholder="Packed weight" /></Field>
-              <Field label="Material"><Input value={form.material} onChange={e => set('material', e.target.value)} placeholder="e.g. Plastic, Metal" /></Field>
-              <Field label="Length (cm)"><Input value={form.length} onChange={e => set('length', e.target.value)} placeholder="cm" /></Field>
-              <Field label="Width (cm)"><Input value={form.width} onChange={e => set('width', e.target.value)} placeholder="cm" /></Field>
-              <Field label="Height (cm)"><Input value={form.height} onChange={e => set('height', e.target.value)} placeholder="cm" /></Field>
+      case 'shipping': {
+        const pWeight = parseFloat(form.shipping_weight || form.weight || 0);
+        const pLen = parseFloat(form.length || 0);
+        const pWid = parseFloat(form.width || 0);
+        const pHgt = parseFloat(form.height || 0);
+        const volWeight = (pLen > 0 && pWid > 0 && pHgt > 0) ? ((pLen * pWid * pHgt) / 5000) : 0;
+        const chargeableWeight = Math.max(pWeight, volWeight);
+
+        return (
+          <div className="space-y-5">
+            <div className="p-4 bg-amber-50 border border-amber-200 rounded-xl text-amber-900 text-xs sm:text-sm flex items-start gap-3">
+              <span className="text-lg leading-none">⚠️</span>
+              <div>
+                <strong className="font-semibold block mb-0.5">Important Courier Measurement Policy:</strong>
+                Enter the estimated packed weight and parcel dimensions, including packaging. These details are used to estimate shipping charges. Incorrect measurements may result in additional courier charges.
+              </div>
             </div>
-          </Section>
-        </div>
-      );
+
+            <Section title="Packaging & Shipping Measurements">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                <Field label="Estimated Packed Weight (kg)" required hint="Include final packaging">
+                  <Input type="number" step="0.01" min="0" value={form.shipping_weight || form.weight} onChange={e => { set('shipping_weight', e.target.value); set('weight', e.target.value); }} placeholder="e.g. 0.5" />
+                </Field>
+                <Field label="Length (cm)" required hint="Parcel length">
+                  <Input type="number" step="0.1" min="0" value={form.length} onChange={e => set('length', e.target.value)} placeholder="e.g. 20" />
+                </Field>
+                <Field label="Width (cm)" required hint="Parcel width">
+                  <Input type="number" step="0.1" min="0" value={form.width} onChange={e => set('width', e.target.value)} placeholder="e.g. 15" />
+                </Field>
+                <Field label="Height (cm)" required hint="Parcel height">
+                  <Input type="number" step="0.1" min="0" value={form.height} onChange={e => set('height', e.target.value)} placeholder="e.g. 10" />
+                </Field>
+              </div>
+
+              {/* Live Volumetric Calculation Preview */}
+              <div className="mt-4 p-3.5 bg-blue-50 border border-blue-100 rounded-xl flex flex-wrap items-center justify-between text-xs sm:text-sm text-blue-900 gap-2">
+                <div>
+                  <span className="font-medium text-gray-600">Volumetric Weight ((L×W×H)/5000):</span>{' '}
+                  <strong className="text-blue-950 font-bold">{volWeight.toFixed(3)} kg</strong>
+                </div>
+                <div>
+                  <span className="font-medium text-gray-600">Chargeable Courier Weight:</span>{' '}
+                  <strong className="text-[#036e26] font-bold text-sm sm:text-base">{chargeableWeight.toFixed(3)} kg</strong>
+                  <span className="text-[11px] text-gray-500 ml-1.5">(Courier bills the higher of actual vs volumetric)</span>
+                </div>
+              </div>
+            </Section>
+
+            <Section title="Material & Classification">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <Field label="Material"><Input value={form.material} onChange={e => set('material', e.target.value)} placeholder="e.g. Cotton, Silk, Plastic" /></Field>
+              </div>
+            </Section>
+          </div>
+        );
+      }
 
       case 'seo': return (
         <div className="space-y-5">
@@ -485,19 +548,6 @@ export function AdminProductFormPage() {
               </div>
               <UploadBtn label="Add Certificate" accept="application/pdf,image/*" onUpload={handleCertUpload} loading={uploadingField === 'cert'} />
             </Field>
-          </Section>
-          <Section title="Location & Contact">
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <Field label="Pickup Location"><Input value={form.pickup_location} onChange={e => set('pickup_location', e.target.value)} placeholder="e.g. Mumbai Warehouse" /></Field>
-              <Field label="Warehouse"><Input value={form.warehouse} onChange={e => set('warehouse', e.target.value)} placeholder="Warehouse name" /></Field>
-              <Field label="Available Cities" hint="Comma-separated"><Input value={form.available_cities} onChange={e => set('available_cities', e.target.value)} placeholder="Mumbai, Delhi" /></Field>
-              <Field label="Shop Name">
-                <Input value={form.shop_name} onChange={e => set('shop_name', e.target.value)} placeholder="e.g. Acme Electronics" />
-              </Field>
-              <Field label="Shop Location">
-                <Input value={form.shop_location} onChange={e => set('shop_location', e.target.value)} placeholder="e.g. Mumbai, Maharashtra" />
-              </Field>
-            </div>
           </Section>
           <Section title="Manufacturer & Tax">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">

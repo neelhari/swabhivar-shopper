@@ -146,15 +146,15 @@ export function VendorLoginPage() {
           {step === 'login' && (
             <form onSubmit={handleLoginSubmit} className="space-y-5 mt-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1.5">Email Address</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1.5">Email or Mobile Number</label>
                 <div className="relative">
                   <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
                     <Mail className="h-5 w-5 text-gray-400" />
                   </div>
                   <input
-                    type="email" required value={email} onChange={(e) => setEmail(e.target.value)}
+                    type="text" required value={email} onChange={(e) => setEmail(e.target.value)}
                     className="block w-full pl-12 pr-4 py-3.5 bg-gray-50/50 border border-gray-200 rounded-[16px] text-gray-900 focus:bg-white focus:ring-2 focus:ring-[#012980]/30 focus:border-[#012980] transition-all shadow-inner"
-                    placeholder="vendor@example.com"
+                    placeholder="Mobile number or email address"
                   />
                 </div>
               </div>

@@ -69,6 +69,25 @@ router.post('/subscribe', vendorAuthMiddleware, async (req, res) => {
     );
     await pool.query('UPDATE vendors SET subscription_expires_at=$1 WHERE id=$2', [expiresAt, req.vendorId]);
 
+    // Vendor referral reward: calculate % of subscription payment for the referrer
+    try {
+      const vDetails = await pool.query('SELECT referred_by FROM vendors WHERE id=$1', [req.vendorId]);
+      const referredBy = vDetails.rows[0]?.referred_by;
+      const subAmount = parseFloat(plan.price || 0);
+
+      if (referredBy && subAmount > 0) {
+        const referralAccountingService = require('../services/referralAccountingService');
+        await referralAccountingService.recordVendorSubscriptionReward({
+          vendorId: req.vendorId,
+          paymentId: payment_id,
+          subscriptionAmount: subAmount,
+          client: pool
+        });
+      }
+    } catch (refErr) {
+      console.error('Vendor subscription referral reward error:', refErr);
+    }
+
     res.json({ message: 'Subscription activated', expires_at: expiresAt });
   } catch (err) {
     res.status(500).json({ error: err.message });

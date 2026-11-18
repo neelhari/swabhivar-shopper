@@ -176,13 +176,16 @@ export function AdminProductRequestsPage() {
     }
   };
 
-  const filtered = products.filter(p =>
-    !search ||
-    p.name?.toLowerCase().includes(search.toLowerCase()) ||
-    p.category?.toLowerCase().includes(search.toLowerCase()) ||
-    p.vendor_name?.toLowerCase().includes(search.toLowerCase()) ||
-    p.store_name?.toLowerCase().includes(search.toLowerCase())
-  );
+  const filtered = products.filter(p => {
+    if (!search) return true;
+    const term = search.toLowerCase();
+    return (
+      (p.name && String(p.name).toLowerCase().includes(term)) ||
+      (p.category && String(p.category).toLowerCase().includes(term)) ||
+      (p.vendor_name && String(p.vendor_name).toLowerCase().includes(term)) ||
+      (p.store_name && String(p.store_name).toLowerCase().includes(term))
+    );
+  });
 
   return (
     <div className="w-full max-w-6xl mx-auto">

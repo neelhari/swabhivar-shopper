@@ -1,10 +1,11 @@
 import React from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Heart, Trash2, Star, ShoppingCart } from 'lucide-react';
+import { Heart, Trash2, Star, ShoppingCart, ChevronLeft } from 'lucide-react';
 import { Header } from '../components/Header';
 import { useWishlistStore } from '../store/useWishlistStore';
 import { useStoreData } from '../store/useStoreData';
 import { useCartStore } from '../store/useCartStore';
+import { navigateBackSafe } from '../utils/backNavigation';
 
 export function WishlistPage() {
   const navigate = useNavigate();
@@ -55,11 +56,20 @@ export function WishlistPage() {
 
         {/* Main Content Area */}
         <div className="flex-1 bg-white rounded-3xl shadow-xl border border-gray-100 min-h-[60vh] overflow-hidden">
-          <div className="px-6 py-5 border-b border-gray-100 bg-gray-50">
-            <h1 className="text-xl font-bold text-[#0b162c] flex items-center gap-2 font-serif" style={{ fontFamily: 'Georgia, serif' }}>
-              <span className="w-1.5 h-6 bg-brand-navy rounded-full inline-block shadow-sm"></span>
-              My Wishlist <span className="font-medium text-gray-500 text-[14px] ml-2">({wishlistProducts.length})</span>
-            </h1>
+          <div className="px-6 py-5 border-b border-gray-100 bg-gray-50 flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <button
+                onClick={() => navigateBackSafe(navigate, '/')}
+                className="p-2 -ml-2 text-gray-700 hover:text-gray-900 hover:bg-gray-200/60 rounded-full transition-colors border border-gray-200 bg-white shadow-xs"
+                aria-label="Back"
+              >
+                <ChevronLeft className="w-5 h-5" />
+              </button>
+              <h1 className="text-xl font-bold text-[#0b162c] flex items-center gap-2 font-serif" style={{ fontFamily: 'Georgia, serif' }}>
+                <span className="w-1.5 h-6 bg-brand-navy rounded-full inline-block shadow-sm"></span>
+                My Wishlist <span className="font-medium text-gray-500 text-[14px] ml-2">({wishlistProducts.length})</span>
+              </h1>
+            </div>
           </div>
 
           {wishlistProducts.length === 0 ? (
@@ -109,9 +119,14 @@ export function WishlistPage() {
                   firstImg = product.images[0];
                 }
                 
-                const displayPrice = defaultSize.price;
-                const originalPrice = Math.round(displayPrice * 1.4);
-                const discountPercent = Math.round(((originalPrice - displayPrice) / originalPrice) * 100);
+                const displayPrice = Number(defaultSize?.price ?? product?.price ?? 0);
+                const originalPrice = Number(defaultSize?.mrp ?? product?.mrp ?? displayPrice);
+                const discountPercent = defaultSize?.discount_percent !== undefined
+                  ? Number(defaultSize.discount_percent)
+                  : (product?.discount_percent !== undefined
+                      ? Number(product.discount_percent)
+                      : (originalPrice > displayPrice ? Math.round(((originalPrice - displayPrice) / originalPrice) * 100) : 0));
+                const hasDiscount = originalPrice > displayPrice && discountPercent > 0;
 
                 return (
                   <div key={product.id} className={`flex gap-6 p-6 ${idx !== wishlistProducts.length - 1 ? 'border-b border-gray-100' : ''} hover:bg-gray-50 transition-all relative group cursor-pointer`} onClick={() => navigate(`/product/${product.id}`)}>
@@ -133,9 +148,13 @@ export function WishlistPage() {
                           </div>
 
                           <div className="flex items-baseline gap-3 mb-2">
-                            <span className="text-2xl font-extrabold text-[#0b162c]">₹{displayPrice}</span>
-                            <span className="text-gray-400 line-through text-[14px]">₹{originalPrice}</span>
-                            <span className="text-brand-navy font-bold text-[14px]">{discountPercent}% off</span>
+                            <span className="text-2xl font-extrabold text-[#0b162c]">₹{displayPrice?.toLocaleString('en-IN')}</span>
+                            {hasDiscount && (
+                              <>
+                                <span className="text-gray-400 line-through text-[14px]">₹{originalPrice?.toLocaleString('en-IN')}</span>
+                                <span className="text-brand-navy font-bold text-[14px]">{discountPercent}% off</span>
+                              </>
+                            )}
                           </div>
                         </div>
 

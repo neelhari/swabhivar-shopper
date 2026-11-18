@@ -8,6 +8,7 @@ import { ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 import { useAuthStore } from './store/useAuthStore';
 import { useCartStore } from './store/useCartStore';
+import { GlobalBackButtonListener } from './components/GlobalBackButtonListener';
 
 import { HomePage } from './pages/HomePage';
 import { CategoryListingPage } from './pages/CategoryListingPage';
@@ -34,11 +35,13 @@ import { OffersPage } from './pages/OffersPage';
 import { CouponsPage } from './pages/CouponsPage';
 import { PrivacyPolicyPage } from './pages/PrivacyPolicyPage';
 import { TermsPage } from './pages/TermsPage';
+import { DeleteAccountPage } from './pages/DeleteAccountPage';
 import { ReferPage } from './pages/ReferPage';
 import { WalletPage } from './pages/WalletPage';
 import { StorePage } from './pages/StorePage';
 
 import { AdminLayout } from './components/admin/AdminLayout';
+import { AdminLoginPage } from './pages/admin/AdminLoginPage';
 import { AdminDashboardPage } from './pages/admin/AdminDashboardPage';
 import { AdminProductsPage } from './pages/admin/AdminProductsPage';
 import { AdminProductFormPage } from './pages/admin/AdminProductFormPage';
@@ -59,6 +62,8 @@ import { AdminOffersPage } from './pages/admin/AdminOffersPage';
 import { AdminAdvertisementsPage } from './pages/admin/AdminAdvertisementsPage';
 import { AdminProductRequestsPage } from './pages/admin/AdminProductRequestsPage';
 import { AdminReferralPayoutsPage } from './pages/admin/AdminReferralPayoutsPage';
+import { AdminReturnsPage } from './pages/admin/AdminReturnsPage';
+import { AdminSettingsPage } from './pages/admin/AdminSettingsPage';
 
 import { SupportLayout } from './components/support/SupportLayout';
 import { SupportLoginPage } from './pages/support/SupportLoginPage';
@@ -81,6 +86,7 @@ import { VendorOffersPage } from './pages/vendor/VendorOffersPage';
 import { VendorProductFormPage } from './pages/vendor/VendorProductFormPage';
 import { VendorReferralPage } from './pages/vendor/VendorReferralPage';
 import { VendorRevenuePage } from './pages/vendor/VendorRevenuePage';
+import { VendorReturnsPage } from './pages/vendor/VendorReturnsPage';
 
 function PageTransition({ children }) {
   return (
@@ -126,20 +132,62 @@ function AnimatedAppRoutes() {
         <Route path="/my-orders" element={<PageTransition><MyOrdersPage /></PageTransition>} />
         <Route path="/my-addresses" element={<PageTransition><MyAddressesPage /></PageTransition>} />
         <Route path="/account-settings" element={<PageTransition><AccountSettingsPage /></PageTransition>} />
+        <Route path="/delete-account" element={<PageTransition><DeleteAccountPage /></PageTransition>} />
       </Routes>
     </AnimatePresence>
   );
 }
 
 function App() {
-  const [showSplash, setShowSplash] = useState(true);
+  const isSpecialRoute = typeof window !== 'undefined' && (
+    window.location.pathname.startsWith('/admin') ||
+    window.location.pathname.startsWith('/admin-login') ||
+    window.location.pathname.startsWith('/vendor') ||
+    window.location.pathname.startsWith('/support') ||
+    window.location.pathname.startsWith('/login') ||
+    window.location.pathname.startsWith('/vendor-login') ||
+    window.location.pathname.startsWith('/support-login')
+  );
+
+  const [showSplash, setShowSplash] = useState(() => {
+    if (isSpecialRoute) return false;
+    try {
+      return !sessionStorage.getItem('splash_shown');
+    } catch {
+      return false;
+    }
+  });
+
   const { fetchData } = useStoreData();
   const { token } = useAuthStore();
   const { fetchCart, clearLocalCart } = useCartStore();
 
   useEffect(() => {
+    if (showSplash) {
+      try { sessionStorage.setItem('splash_shown', 'true'); } catch {}
+      const timer = setTimeout(() => {
+        setShowSplash(false);
+      }, 2000);
+      return () => clearTimeout(timer);
+    }
+  }, [showSplash]);
+
+  useEffect(() => {
     fetchData();
   }, [fetchData]);
+
+  // Capture incoming referral parameters globally (?ref=... or ?referral=...)
+  useEffect(() => {
+    try {
+      const params = new URLSearchParams(window.location.search);
+      const ref = params.get('ref') || params.get('referral');
+      if (ref) {
+        localStorage.setItem('pending_referral_code', ref.trim());
+      }
+    } catch (e) {
+      // Ignore in non-browser/restricted environments
+    }
+  }, []);
 
   useEffect(() => {
     if (token) {
@@ -154,10 +202,12 @@ function App() {
       {showSplash && <SplashScreen onComplete={() => setShowSplash(false)} />}
       <div style={{ opacity: showSplash ? 0 : 1 }} className="transition-opacity duration-300">
         <BrowserRouter>
+          <GlobalBackButtonListener />
           <Routes>
             {/* Auth pages — no layout */}
             <Route path="/login" element={<LoginPage />} />
             <Route path="/signup" element={<SignupPage />} />
+            <Route path="/admin-login" element={<AdminLoginPage />} />
             <Route path="/vendor-login" element={<VendorLoginPage />} />
             <Route path="/vendor-signup" element={<VendorSignupPage />} />
             <Route path="/support-login" element={<SupportLoginPage />} />
@@ -187,6 +237,8 @@ function App() {
                   <Route path="advertisements" element={<AdminAdvertisementsPage />} />
                   <Route path="product-requests" element={<AdminProductRequestsPage />} />
                   <Route path="payouts" element={<AdminReferralPayoutsPage />} />
+                  <Route path="returns" element={<AdminReturnsPage />} />
+                  <Route path="settings" element={<AdminSettingsPage />} />
                 </Routes>
               </AdminLayout>
             } />
@@ -229,6 +281,7 @@ function App() {
                   <Route path="products/new" element={<VendorProductFormPage />} />
                   <Route path="products/:id/edit" element={<VendorProductFormPage />} />
                   <Route path="orders" element={<VendorOrdersPage />} />
+                  <Route path="returns" element={<VendorReturnsPage />} />
                   <Route path="categories" element={<VendorCategoriesPage />} />
                   <Route path="wallet" element={<VendorWalletPage />} />
                   <Route path="profile" element={<VendorProfilePage />} />

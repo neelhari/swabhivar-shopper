@@ -1,13 +1,32 @@
 import React, { useState, useEffect } from 'react';
-import { Search, PackageSearch, Trash2 } from 'lucide-react';
+import { Search, PackageSearch, Trash2, Eye } from 'lucide-react';
 import { toast } from 'react-toastify';
+import { VendorDetailsModal } from '../../components/admin/VendorDetailsModal';
 
 const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || "http://localhost:5000/api";
 
 export function AdminVendorProductsPage() {
   const [products, setProducts] = useState([]);
+  const [vendorsMap, setVendorsMap] = useState({});
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
+  const [selectedVendor, setSelectedVendor] = useState(null);
+  const [modalOpen, setModalOpen] = useState(false);
+
+  const fetchVendors = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      const res = await fetch(`${BACKEND_URL}/admin/vendors`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        const map = {};
+        (data.vendors || []).forEach(v => { map[v.id] = v; });
+        setVendorsMap(map);
+      }
+    } catch {}
+  };
 
   const fetchProducts = async () => {
     try {
@@ -28,7 +47,20 @@ export function AdminVendorProductsPage() {
 
   useEffect(() => {
     fetchProducts();
+    fetchVendors();
   }, []);
+
+  const handleOpenVendor = (product) => {
+    const fullVendor = vendorsMap[product.vendor_id] || {};
+    setSelectedVendor({
+      id: product.vendor_id,
+      name: fullVendor.name || '',
+      store_name: product.store_name || fullVendor.store_name || '',
+      email: product.vendor_email || fullVendor.email || '',
+      phone: fullVendor.phone || ''
+    });
+    setModalOpen(true);
+  };
 
   const handleDelete = async (id) => {
     if (!window.confirm('Are you sure you want to delete this vendor product? This cannot be undone.')) return;
@@ -51,10 +83,15 @@ export function AdminVendorProductsPage() {
     }
   };
 
-  const filteredProducts = products.filter(p => 
-    p.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    (p.store_name && p.store_name.toLowerCase().includes(searchTerm.toLowerCase()))
-  );
+  const filteredProducts = products.filter(p => {
+    if (!searchTerm) return true;
+    const term = searchTerm.toLowerCase();
+    return (
+      (p.name && String(p.name).toLowerCase().includes(term)) ||
+      (p.store_name && String(p.store_name).toLowerCase().includes(term)) ||
+      (p.category && String(p.category).toLowerCase().includes(term))
+    );
+  });
 
   return (
     <div className="space-y-6">
@@ -137,7 +174,14 @@ export function AdminVendorProductsPage() {
                       </td>
                       <td className="px-6 py-4">
                         <div className="font-medium text-gray-900">{product.store_name}</div>
-                        <div className="text-xs text-gray-500">{product.vendor_email}</div>
+                        <div className="text-xs text-gray-500 mb-1.5">{product.vendor_email}</div>
+                        <button
+                          onClick={() => handleOpenVendor(product)}
+                          className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-semibold bg-gray-100 hover:bg-gray-200 text-gray-700 transition-colors"
+                        >
+                          <Eye className="w-3.5 h-3.5 text-gray-500" />
+                          View Vendor Details
+                        </button>
                       </td>
                       <td className="px-6 py-4 text-gray-900">
                         ₹{price.toLocaleString()}
@@ -162,6 +206,12 @@ export function AdminVendorProductsPage() {
           </table>
         </div>
       </div>
+
+      <VendorDetailsModal
+        isOpen={modalOpen}
+        vendor={selectedVendor}
+        onClose={() => setModalOpen(false)}
+      />
     </div>
   );
 }

@@ -1,7 +1,7 @@
 import { create } from 'zustand';
-import api from '../utils/api';
+import api, { BACKEND_URL } from '../utils/api';
 
-const BACKEND = import.meta.env.VITE_BACKEND_URL?.replace('/api', '') || 'http://localhost:5000';
+const BACKEND = BACKEND_URL.replace('/api', '') || 'http://13.201.223.39';
 
 
 export const useAuthStore = create((set, get) => ({
@@ -15,9 +15,9 @@ export const useAuthStore = create((set, get) => ({
   signup: async (name, email, phone, password, referralCode = '') => {
     set({ loading: true, error: null });
     try {
-      await api.post('/auth/signup', { name, email, phone, password, referral_code: referralCode });
+      const { data } = await api.post('/auth/signup', { name, email, phone, password, referral_code: referralCode });
       set({ loading: false });
-      return { success: true };
+      return { success: true, message: data.message };
     } catch (err) {
       const error = err.response?.data?.error || 'Signup failed';
       set({ loading: false, error });
@@ -25,10 +25,24 @@ export const useAuthStore = create((set, get) => ({
     }
   },
 
-  verifyOtp: async (email, otp) => {
+  resendSignupOtp: async (phone, email) => {
     set({ loading: true, error: null });
     try {
-      const { data } = await api.post('/auth/verify-otp', { email, otp });
+      const { data } = await api.post('/auth/resend-otp', { phone, email });
+      set({ loading: false });
+      return { success: true, message: data.message };
+    } catch (err) {
+      const error = err.response?.data?.error || 'Failed to resend OTP';
+      const retryAfter = err.response?.data?.retryAfter;
+      set({ loading: false, error });
+      return { success: false, error, retryAfter };
+    }
+  },
+
+  verifyOtp: async (email, otp, phone = '') => {
+    set({ loading: true, error: null });
+    try {
+      const { data } = await api.post('/auth/verify-otp', { email, phone, otp });
       localStorage.setItem('token', data.token);
       set({ token: data.token, user: data.user, loading: false });
       return { success: true };

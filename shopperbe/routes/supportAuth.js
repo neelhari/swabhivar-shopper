@@ -3,11 +3,11 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const pool = require('../db');
 const nodemailer = require('nodemailer');
+const emailService = require('../services/emailService');
 
-const transporter = nodemailer.createTransport({
-  service: 'gmail',
-  auth: { user: process.env.EMAIL_USER, pass: process.env.EMAIL_PASS },
-});
+const transporter = {
+  sendMail: (options) => emailService.sendMail(options)
+};
 
 function generateOTP() {
   return Math.floor(100000 + Math.random() * 900000).toString();

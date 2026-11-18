@@ -467,7 +467,7 @@ export function AdminAdvertisementsPage() {
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 max-h-[300px] overflow-y-auto pr-2 custom-scrollbar">
                     {products
                       .filter(p => !filterCategory || p.category === filterCategory)
-                      .filter(p => !searchQuery || p.name.toLowerCase().includes(searchQuery.toLowerCase()))
+                      .filter(p => !searchQuery || (p.name && String(p.name).toLowerCase().includes(searchQuery.toLowerCase())))
                       .map(p => {
                       const isSelected = selectedProducts.includes(p.id.toString());
                       return (

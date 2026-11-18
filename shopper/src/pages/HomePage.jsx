@@ -5,6 +5,7 @@ import { Header } from '../components/Header';
 import { ProductCard } from '../components/ProductCard';
 import { AdBanner } from '../components/AdBanner';
 import { useStoreData } from '../store/useStoreData';
+import api from '../utils/api';
 import gsap from 'gsap';
 import { useGSAP } from '@gsap/react';
 
@@ -17,26 +18,41 @@ export function HomePage() {
   const navigate = useNavigate();
   const { products, categories, vendors, loading } = useStoreData();
   const [banners, setBanners] = React.useState([]);
+  const [collectionBanners, setCollectionBanners] = React.useState([]);
   const [bestsellerAds, setBestsellerAds] = React.useState([]);
 
   const [productQuery, setProductQuery] = useState('');
   const [shopQuery, setShopQuery] = useState('');
 
-  const productResults = productQuery ? products.filter(p => p.name.toLowerCase().includes(productQuery.toLowerCase()) || p.category.toLowerCase().includes(productQuery.toLowerCase())).slice(0, 5) : [];
+  const productResults = productQuery ? products.filter(p => 
+    (p.name && String(p.name).toLowerCase().includes(productQuery.toLowerCase())) || 
+    (p.category && String(p.category).toLowerCase().includes(productQuery.toLowerCase()))
+  ).slice(0, 5) : [];
   const shopResults = shopQuery ? vendors?.filter(v => v.business_name?.toLowerCase().includes(shopQuery.toLowerCase())).slice(0, 5) : [];
 
 
   React.useEffect(() => {
-    const url = import.meta.env.VITE_BACKEND_URL || "http://localhost:5000/api";
-    fetch(`${url}/general/banners`)
-      .then(r => r.json())
-      .then(d => { if (d.banners) setBanners(d.banners); })
+    api.get('/general/banners')
+      .then(res => {
+        const all = res.data?.banners || [];
+        setBanners(all.filter(b => !b.type || b.type === 'homepage_hero'));
+        const collections = all.filter(b => b.type === 'collection_banner');
+        if (collections.length > 0) {
+          setCollectionBanners(collections);
+        }
+        const budget = all.filter(b => b.type === 'budget_banner');
+        if (budget.length > 0) {
+          setBestsellerAds(budget);
+        }
+      })
       .catch(e => console.error(e));
 
-
-    fetch(`${url}/advertisements?type=bestseller_category&is_active=true`)
-      .then(r => r.json())
-      .then(d => { if (d.advertisements) setBestsellerAds(d.advertisements); })
+    api.get('/advertisements?type=bestseller_category&is_active=true')
+      .then(res => {
+        if (res.data?.advertisements && res.data.advertisements.length > 0) {
+          setBestsellerAds(prev => prev.length > 0 ? prev : res.data.advertisements);
+        }
+      })
       .catch(e => console.error(e));
   }, []);
 
@@ -76,7 +92,7 @@ export function HomePage() {
       <Header variant="home" />
 
       {/* Mobile Search Bar (Moved from Header) */}
-      <div className="md:hidden px-4 pt-8 pb-2 bg-white relative z-[60]">
+      <div className="md:hidden px-4 pt-3 pb-2 bg-white relative">
         <div className="relative flex items-center cursor-text">
           <Search className="w-5 h-5 text-gray-400 absolute left-4 top-1/2 -translate-y-1/2" />
           <input
@@ -103,7 +119,7 @@ export function HomePage() {
         )}
       </div>
 
-      <div className="max-w-[1280px] mx-auto px-4 pt-4 mt-1 md:mt-4 md:mb-2 relative z-50">
+      <div className="max-w-[1280px] mx-auto px-4 pt-1 md:pt-4 md:mb-2 relative">
         {/* Location Search Bar */}
         <div className="relative block w-full md:w-[600px] md:mx-auto mb-5">
           <div className="bg-blue-50 border border-blue-100 rounded-full px-5 py-3.5 md:py-4 flex items-center gap-3 cursor-text transition-all focus-within:bg-blue-100 focus-within:shadow-md md:shadow-sm md:hover:shadow-md group">
@@ -119,7 +135,7 @@ export function HomePage() {
               value={shopQuery}
               onChange={(e) => setShopQuery(e.target.value)}
               placeholder="Search shops near your location"
-              className="w-full bg-transparent border-none outline-none text-[15px] md:text-base font-semibold text-brand-navy placeholder:text-brand-navy"
+              className="w-full bg-transparent border-none outline-none text-[13.5px] sm:text-[15px] md:text-base font-semibold text-brand-navy placeholder:text-brand-navy truncate"
             />
           </div>
           {shopQuery && (
@@ -337,21 +353,14 @@ export function HomePage() {
 
           {/* Features Highlights */}
           <div className="flex items-center justify-between bg-white border border-gray-100 rounded-2xl p-4 shadow-[0_2px_10px_rgba(0,0,0,0.02)]">
-            <div className="flex flex-col items-center text-center gap-1.5 flex-1 border-r border-gray-50 last:border-0">
+            <div className="flex flex-col items-center text-center gap-1.5 flex-1 border-r border-gray-100">
               <ShieldCheck className="w-5 h-5 text-blue-500" strokeWidth={1.5} />
               <div className="flex flex-col">
                 <span className="text-[10px] md:text-xs font-bold text-gray-800 leading-tight">Secure<br />Payments</span>
                 <span className="text-[9px] md:text-[10px] text-gray-400 mt-0.5">100% safe</span>
               </div>
             </div>
-            <div className="flex flex-col items-center text-center gap-1.5 flex-1 border-r border-gray-50 last:border-0">
-              <Truck className="w-5 h-5 text-blue-500" strokeWidth={1.5} />
-              <div className="flex flex-col">
-                <span className="text-[10px] md:text-xs font-bold text-gray-800 leading-tight">Fast<br />Delivery</span>
-                <span className="text-[9px] md:text-[10px] text-gray-400 mt-0.5">On-time</span>
-              </div>
-            </div>
-            <div className="flex flex-col items-center text-center gap-1.5 flex-1 border-r border-gray-50 last:border-0">
+            <div className="flex flex-col items-center text-center gap-1.5 flex-1 border-r border-gray-100">
               <Award className="w-5 h-5 text-blue-600" strokeWidth={1.5} />
               <div className="flex flex-col">
                 <span className="text-[10px] md:text-xs font-bold text-gray-800 leading-tight">Best<br />Quality</span>
@@ -468,49 +477,24 @@ export function HomePage() {
             </div>
 
             <div className="grid grid-cols-2 gap-4">
-              {/* Collection 1 */}
-              <Link to="/collection/wedding" className="relative group overflow-hidden rounded-[2rem] aspect-[3/4] bg-gray-100 block">
-                <img src="https://images.unsplash.com/photo-1595777457583-95e059d581b8?w=800&q=80" alt="Wedding Collection" className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700" />
-                <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent flex flex-col justify-end p-4 md:p-6">
-                  <h4 className="text-white font-serif font-bold text-lg md:text-xl leading-tight">Wedding Collection</h4>
-                  <div className="mt-3 inline-flex">
-                    <span className="inline-flex items-center gap-1.5 px-4 py-1.5 bg-brand-navy text-white text-[11px] font-black uppercase tracking-wider rounded-full shadow-lg group-hover:bg-blue-600 transition-all">Shop now <span className="group-hover:translate-x-1 transition-transform text-sm leading-none">→</span></span>
+              {(collectionBanners.length > 0 ? collectionBanners : [
+                { id: 1, title: "Wedding Collection", image_url: "https://images.unsplash.com/photo-1595777457583-95e059d581b8?w=800&q=80", link_url: "/collection/wedding" },
+                { id: 2, title: "Festival Collection", image_url: "https://images.unsplash.com/photo-1610030469983-98e550d6193c?w=800&q=80", link_url: "/collection/festival" },
+                { id: 3, title: "Office Wear", image_url: "https://images.unsplash.com/photo-1610030469983-98e550d6193c?w=800&q=80", link_url: "/collection/office" },
+                { id: 4, title: "Casual Wear", image_url: "https://images.unsplash.com/photo-1606902965551-dce093cda6e7?w=800&q=80", link_url: "/collection/casual" }
+              ]).map((col, idx) => (
+                <Link key={col.id || idx} to={col.link_url || "/category/all"} className="relative group overflow-hidden rounded-[2rem] aspect-[3/4] bg-gray-100 block">
+                  <img src={col.image_url} alt={col.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700" />
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent flex flex-col justify-end p-4 md:p-6">
+                    <h4 className="text-white font-serif font-bold text-lg md:text-xl leading-tight">{col.title}</h4>
+                    <div className="mt-3 inline-flex">
+                      <span className="inline-flex items-center gap-1.5 px-4 py-1.5 bg-brand-navy text-white text-[11px] font-black uppercase tracking-wider rounded-full shadow-lg group-hover:bg-blue-600 transition-all">
+                        Shop now <span className="group-hover:translate-x-1 transition-transform text-sm leading-none">→</span>
+                      </span>
+                    </div>
                   </div>
-                </div>
-              </Link>
-
-              {/* Collection 2 */}
-              <Link to="/collection/festival" className="relative group overflow-hidden rounded-[2rem] aspect-[3/4] bg-gray-100 block">
-                <img src="https://images.unsplash.com/photo-1610030469983-98e550d6193c?w=800&q=80" alt="Festival Collection" className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700" />
-                <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent flex flex-col justify-end p-4 md:p-6">
-                  <h4 className="text-white font-serif font-bold text-lg md:text-xl leading-tight">Festival Collection</h4>
-                  <div className="mt-3 inline-flex">
-                    <span className="inline-flex items-center gap-1.5 px-4 py-1.5 bg-brand-navy text-white text-[11px] font-black uppercase tracking-wider rounded-full shadow-lg group-hover:bg-blue-600 transition-all">Shop now <span className="group-hover:translate-x-1 transition-transform text-sm leading-none">→</span></span>
-                  </div>
-                </div>
-              </Link>
-
-              {/* Collection 3 */}
-              <Link to="/collection/office" className="relative group overflow-hidden rounded-[2rem] aspect-[3/4] bg-gray-100 block">
-                <img src="https://images.unsplash.com/photo-1610030469983-98e550d6193c?w=800&q=80" alt="Office Wear" className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700" />
-                <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent flex flex-col justify-end p-4 md:p-6">
-                  <h4 className="text-white font-serif font-bold text-lg md:text-xl leading-tight">Office Wear</h4>
-                  <div className="mt-3 inline-flex">
-                    <span className="inline-flex items-center gap-1.5 px-4 py-1.5 bg-brand-navy text-white text-[11px] font-black uppercase tracking-wider rounded-full shadow-lg group-hover:bg-blue-600 transition-all">Shop now <span className="group-hover:translate-x-1 transition-transform text-sm leading-none">→</span></span>
-                  </div>
-                </div>
-              </Link>
-
-              {/* Collection 4 */}
-              <Link to="/collection/casual" className="relative group overflow-hidden rounded-[2rem] aspect-[3/4] bg-gray-100 block">
-                <img src="https://images.unsplash.com/photo-1606902965551-dce093cda6e7?w=800&q=80" alt="Casual Wear" className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700" />
-                <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent flex flex-col justify-end p-4 md:p-6">
-                  <h4 className="text-white font-serif font-bold text-lg md:text-xl leading-tight">Casual Wear</h4>
-                  <div className="mt-3 inline-flex">
-                    <span className="inline-flex items-center gap-1.5 px-4 py-1.5 bg-brand-navy text-white text-[11px] font-black uppercase tracking-wider rounded-full shadow-lg group-hover:bg-blue-600 transition-all">Shop now <span className="group-hover:translate-x-1 transition-transform text-sm leading-none">→</span></span>
-                  </div>
-                </div>
-              </Link>
+                </Link>
+              ))}
             </div>
           </div>
 
@@ -621,14 +605,14 @@ export function HomePage() {
             </div>
           </div>
 
-          {/* Bottom Features Block (Free Delivery, etc) */}
+          {/* Bottom Features Block (Authentic Products, etc) */}
           <div className="bg-white py-6 px-4 md:p-8 rounded-2xl mt-0 mb-0 shadow-sm border border-gray-100">
             <div className="grid grid-cols-2 md:grid-cols-4 gap-6 md:gap-8 divide-x-0 md:divide-x divide-gray-100">
               <div className="flex flex-col md:flex-row items-center md:items-start gap-4 px-4 text-center md:text-left">
-                <div className="w-12 h-12 rounded-full bg-emerald-50 flex items-center justify-center text-emerald-600 text-2xl border border-emerald-100">✈️</div>
+                <div className="w-12 h-12 rounded-full bg-amber-50 flex items-center justify-center text-amber-600 text-2xl border border-amber-100">✨</div>
                 <div>
-                  <h4 className="text-gray-900 font-semibold">Free Delivery</h4>
-                  <p className="text-gray-500 text-xs md:text-sm">On orders over $50</p>
+                  <h4 className="text-gray-900 font-semibold">100% Authentic</h4>
+                  <p className="text-gray-500 text-xs md:text-sm">Handpicked collections</p>
                 </div>
               </div>
               <div className="flex flex-col md:flex-row items-center md:items-start gap-4 px-4 text-center md:text-left">

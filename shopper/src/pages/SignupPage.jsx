@@ -18,15 +18,41 @@ function GoogleIcon() {
 
 export function SignupPage() {
   const navigate = useNavigate();
-  const { signup, verifyOtp, loginWithGoogle, loading, error } = useAuthStore();
+  const { signup, resendSignupOtp, verifyOtp, loginWithGoogle, loading, error } = useAuthStore();
 
   const [step, setStep] = useState('form');
   const [showPass, setShowPass] = useState(false);
   const [form, setForm] = useState({ name: '', email: '', phone: '', password: '', referralCode: '' });
   const [otp, setOtp] = useState(['', '', '', '', '', '']);
   const [localError, setLocalError] = useState('');
+  const [resendTimer, setResendTimer] = useState(60);
+  const [resendingOtp, setResendingOtp] = useState(false);
   const [referrer, setReferrer] = useState(null);
   const otpRefs = useRef([]);
+
+  // 60-second countdown for Resend SMS OTP
+  useEffect(() => {
+    let interval = null;
+    if (step === 'otp' && resendTimer > 0) {
+      interval = setInterval(() => {
+        setResendTimer((prev) => (prev > 0 ? prev - 1 : 0));
+      }, 1000);
+    }
+    return () => clearInterval(interval);
+  }, [step, resendTimer]);
+
+  // Auto-populate referral code from URL query parameter or localStorage
+  useEffect(() => {
+    try {
+      const params = new URLSearchParams(window.location.search);
+      const ref = params.get('ref') || params.get('referral') || localStorage.getItem('pending_referral_code');
+      if (ref) {
+        setForm(prev => ({ ...prev, referralCode: ref.trim() }));
+      }
+    } catch (e) {
+      console.warn('Could not read referral code from URL:', e);
+    }
+  }, []);
 
   const handleChange = (e) => setForm({ ...form, [e.target.name]: e.target.value });
 
@@ -54,8 +80,26 @@ export function SignupPage() {
   const handleSignup = async (e) => {
     e.preventDefault(); setLocalError('');
     const res = await signup(form.name, form.email, form.phone, form.password, form.referralCode);
-    if (res.success) setStep('otp');
-    else setLocalError(res.error);
+    if (res.success) {
+      setResendTimer(60);
+      setStep('otp');
+    } else {
+      setLocalError(res.error);
+    }
+  };
+
+  const handleResend = async () => {
+    if (resendTimer > 0 || resendingOtp || loading) return;
+    setResendingOtp(true);
+    setLocalError('');
+    const res = await resendSignupOtp(form.phone, form.email);
+    if (res.success) {
+      setResendTimer(60);
+    } else {
+      setLocalError(res.error);
+      if (res.retryAfter) setResendTimer(res.retryAfter);
+    }
+    setResendingOtp(false);
   };
 
   const handleOtpChange = (e, idx) => {
@@ -86,7 +130,7 @@ export function SignupPage() {
     e.preventDefault(); setLocalError('');
     const code = otp.join('');
     if (code.length < 6) return setLocalError('Enter all 6 digits');
-    const res = await verifyOtp(form.email, code);
+    const res = await verifyOtp(form.email, code, form.phone);
     if (res.success) navigate('/');
     else setLocalError(res.error);
   };
@@ -190,8 +234,8 @@ export function SignupPage() {
               <form onSubmit={handleSignup} className="space-y-3.5">
                 {[
                   { icon: <User className="w-4 h-4 text-gray-400" />, name: 'name', type: 'text', placeholder: 'Full name', required: true },
+                  { icon: <Phone className="w-4 h-4 text-gray-400" />, name: 'phone', type: 'tel', placeholder: 'Mobile number (10 digits for SMS OTP)', required: true },
                   { icon: <Mail className="w-4 h-4 text-gray-400" />, name: 'email', type: 'email', placeholder: 'Email address', required: true },
-                  { icon: <Phone className="w-4 h-4 text-gray-400" />, name: 'phone', type: 'tel', placeholder: 'Phone number (+91...)', required: true },
                   { icon: <Tag className="w-4 h-4 text-gray-400" />, name: 'referralCode', type: 'text', placeholder: 'Referral Code (Optional)', required: false },
                 ].map(f => (
                   <div key={f.name} className="relative">
@@ -231,6 +275,13 @@ export function SignupPage() {
                   className="w-full bg-gradient-to-r from-brand-navy to-yellow-400 text-white font-bold py-4 rounded-2xl text-[15px] shadow-[0_4px_20px_rgba(254,102,3,0.4)] hover:shadow-[0_8px_30px_rgba(254,102,3,0.5)] hover:-translate-y-0.5 active:scale-[0.98] transition-all disabled:opacity-60 flex items-center justify-center gap-2 mt-1">
                   {loading ? <><span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />Sending OTP...</> : 'Continue →'}
                 </button>
+
+                <p className="text-[11px] text-gray-500 text-center leading-relaxed px-2 mt-2">
+                  By signing up, you agree to our{' '}
+                  <Link to="/terms" target="_blank" className="text-brand-navy font-semibold underline">Terms of Service</Link>{' '}
+                  and{' '}
+                  <Link to="/privacy-policy" target="_blank" className="text-brand-navy font-semibold underline">Privacy Policy</Link>.
+                </p>
               </form>
 
               {/* Google button below form */}
@@ -261,9 +312,9 @@ export function SignupPage() {
                 <div className="w-16 h-16 rounded-full bg-brand-navy/5 border border-brand-navy/10 flex items-center justify-center mx-auto mb-5">
                   <ShieldCheck className="w-8 h-8 text-brand-navy" />
                 </div>
-                <h2 className="text-2xl font-extrabold text-[#0b162c]" style={{ fontFamily: 'Georgia, serif' }}>Verify Email</h2>
-                <p className="text-[13px] text-gray-500 mt-2">We've sent a 6-digit code to</p>
-                <p className="text-[#0b162c] font-bold text-[14px] mt-0.5">{form.email}</p>
+                <h2 className="text-2xl font-extrabold text-[#0b162c]" style={{ fontFamily: 'Georgia, serif' }}>Verify Mobile Number</h2>
+                <p className="text-[13px] text-gray-500 mt-2">We've sent a 6-digit SMS verification code via MSG91 to</p>
+                <p className="text-[#0b162c] font-bold text-base mt-1 tracking-wider">+91 {form.phone.replace(/\D/g, '').slice(-10)}</p>
               </div>
 
               {displayError && (
@@ -286,6 +337,17 @@ export function SignupPage() {
                         ${digit ? 'border-brand-navy text-brand-navy shadow-[0_0_0_4px_rgba(254,102,3,0.12)] bg-[#0b162c]/5' : 'border-gray-200 bg-gray-50 text-[#0b162c] focus:border-[#0b162c] focus:bg-white focus:shadow-[0_0_0_4px_rgba(11,22,44,0.08)]'}`}
                     />
                   ))}
+                </div>
+
+                <div className="text-center pt-1">
+                  <button
+                    type="button"
+                    disabled={resendTimer > 0 || resendingOtp || loading}
+                    onClick={handleResend}
+                    className="text-[13px] font-semibold text-brand-navy hover:underline disabled:text-gray-400 disabled:no-underline transition-colors"
+                  >
+                    {resendingOtp ? 'Sending SMS OTP...' : resendTimer > 0 ? `Resend SMS OTP in ${resendTimer}s` : 'Resend SMS OTP'}
+                  </button>
                 </div>
 
                 <button type="submit" disabled={loading}

@@ -1,12 +1,16 @@
 import React, { useEffect, useState } from "react";
-import { HeadphonesIcon, MessageSquare, Clock, CheckCircle, Search } from "lucide-react";
+import { HeadphonesIcon, MessageSquare, Clock, CheckCircle, Search, Eye } from "lucide-react";
 import { toast } from "react-toastify";
+import { VendorDetailsModal } from "../../components/admin/VendorDetailsModal";
 
 const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || "http://localhost:5000/api";
 
 export function AdminSupportPage() {
   const [vendorTickets, setVendorTickets] = useState([]);
+  const [vendorsMap, setVendorsMap] = useState({});
   const [searchTerm, setSearchTerm] = useState("");
+  const [selectedVendor, setSelectedVendor] = useState(null);
+  const [modalOpen, setModalOpen] = useState(false);
 
   const adminToken = localStorage.getItem("token");
 
@@ -19,7 +23,30 @@ export function AdminSupportPage() {
         if (Array.isArray(d)) setVendorTickets(d);
       })
       .catch(console.error);
+
+    fetch(`${BACKEND_URL}/admin/vendors`, {
+      headers: { "Authorization": "Bearer " + adminToken }
+    })
+      .then(r => r.json())
+      .then(d => {
+        const map = {};
+        (d.vendors || []).forEach(v => { map[v.id] = v; });
+        setVendorsMap(map);
+      })
+      .catch(console.error);
   }, [adminToken]);
+
+  const handleOpenVendor = (ticket) => {
+    const fullVendor = vendorsMap[ticket.vendor_id] || {};
+    setSelectedVendor({
+      id: ticket.vendor_id,
+      name: ticket.vendor_name || fullVendor.name || '',
+      store_name: fullVendor.store_name || '',
+      email: ticket.vendor_email || fullVendor.email || '',
+      phone: fullVendor.phone || ''
+    });
+    setModalOpen(true);
+  };
 
   const handleTicketStatus = async (ticketId, newStatus) => {
     try {
@@ -53,11 +80,15 @@ export function AdminSupportPage() {
     }
   };
 
-  const filteredTickets = vendorTickets.filter(t => 
-    t.subject.toLowerCase().includes(searchTerm.toLowerCase()) || 
-    t.id.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    t.vendor_id.toLowerCase().includes(searchTerm.toLowerCase())
-  ).sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+  const filteredTickets = vendorTickets.filter(t => {
+    if (!searchTerm) return true;
+    const term = searchTerm.toLowerCase();
+    return (
+      (t.subject && String(t.subject).toLowerCase().includes(term)) || 
+      (t.id != null && String(t.id).toLowerCase().includes(term)) ||
+      (t.vendor_id != null && String(t.vendor_id).toLowerCase().includes(term))
+    );
+  }).sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
 
   return (
     <div className="w-full max-w-5xl mx-auto space-y-6">
@@ -110,7 +141,19 @@ export function AdminSupportPage() {
                       <p className="text-gray-400 text-xs mt-1">{new Date(ticket.created_at).toLocaleDateString()}</p>
                     </td>
                     <td className="px-8 py-5">
-                      <span className="font-semibold text-gray-700 bg-gray-100 px-2 py-1 rounded-md text-xs">{ticket.vendor_id}</span>
+                      <div className="flex flex-col gap-1.5 items-start">
+                        <span className="font-semibold text-gray-700 bg-gray-100 px-2 py-0.5 rounded-md text-xs">Vendor #{ticket.vendor_id}</span>
+                        {ticket.vendor_name && (
+                          <span className="text-xs font-medium text-gray-800">{ticket.vendor_name}</span>
+                        )}
+                        <button
+                          onClick={() => handleOpenVendor(ticket)}
+                          className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-semibold bg-gray-100 hover:bg-gray-200 text-gray-700 transition-colors"
+                        >
+                          <Eye className="w-3 h-3 text-gray-500" />
+                          View Vendor Details
+                        </button>
+                      </div>
                     </td>
                     <td className="px-8 py-5">
                       <p className="font-bold text-gray-900">{ticket.subject}</p>
@@ -145,6 +188,12 @@ export function AdminSupportPage() {
           </div>
         )}
       </div>
+
+      <VendorDetailsModal
+        isOpen={modalOpen}
+        vendor={selectedVendor}
+        onClose={() => setModalOpen(false)}
+      />
     </div>
   );
 }

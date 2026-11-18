@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { User, Mail, Phone, Lock, Eye, EyeOff, Check, LogOut } from 'lucide-react';
+import { User, Mail, Phone, Lock, Eye, EyeOff, Check, LogOut, Trash2, AlertTriangle, X } from 'lucide-react';
 import { useAuthStore } from '../store/useAuthStore';
 import api from '../utils/api';
 import { Header } from '../components/Header';
@@ -14,6 +14,12 @@ export function AccountSettingsPage() {
   const [profileMsg, setProfileMsg] = useState('');
   const [passMsg, setPassMsg] = useState('');
   const [saving, setSaving] = useState(false);
+
+  // Deletion modal state
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [deletePassword, setDeletePassword] = useState('');
+  const [deleteError, setDeleteError] = useState('');
+  const [deleting, setDeleting] = useState(false);
 
   useEffect(() => {
     if (!token) { navigate('/login'); return; }
@@ -47,6 +53,20 @@ export function AccountSettingsPage() {
     }
     setSaving(false);
     setTimeout(() => setPassMsg(''), 3000);
+  };
+
+  const handleDeleteAccount = async (e) => {
+    e.preventDefault();
+    setDeleteError('');
+    setDeleting(true);
+    try {
+      await api.post('/auth/delete-account', { password: deletePassword });
+      logout();
+      navigate('/?account_deleted=true');
+    } catch (err) {
+      setDeleteError(err.response?.data?.error || 'Failed to delete account.');
+      setDeleting(false);
+    }
   };
 
   return (
@@ -135,13 +155,89 @@ export function AccountSettingsPage() {
         </div>
 
         {/* Danger Zone */}
-        <div className="bg-white rounded-2xl shadow-sm border border-red-100 p-5">
-          <h2 className="text-sm font-bold text-red-600 mb-3">Danger Zone</h2>
+        <div className="bg-white rounded-2xl shadow-sm border border-red-100 p-5 space-y-3">
+          <h2 className="text-sm font-bold text-red-600">Danger Zone</h2>
           <button onClick={() => { logout(); navigate('/'); }}
             className="w-full flex items-center justify-center gap-2 border border-red-200 text-red-500 font-bold py-3 rounded-xl text-sm hover:bg-red-50 transition-colors">
             <LogOut className="w-4 h-4" /> Logout from all devices
           </button>
+          
+          <button
+            type="button"
+            onClick={() => { setShowDeleteModal(true); setDeleteError(''); setDeletePassword(''); }}
+            className="w-full flex items-center justify-center gap-2 bg-red-50 hover:bg-red-100 text-red-600 font-bold py-3 rounded-xl text-sm transition-colors border border-red-200"
+          >
+            <Trash2 className="w-4 h-4" /> Delete My Account
+          </button>
         </div>
+
+        {/* Delete Confirmation Modal */}
+        {showDeleteModal && (
+          <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4 backdrop-blur-xs">
+            <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl relative animate-in fade-in zoom-in-95 duration-200">
+              <button
+                type="button"
+                onClick={() => setShowDeleteModal(false)}
+                className="absolute right-4 top-4 text-gray-400 hover:text-gray-600 p-1"
+              >
+                <X className="w-5 h-5" />
+              </button>
+
+              <div className="w-12 h-12 rounded-2xl bg-red-100 text-red-600 flex items-center justify-center mb-4">
+                <AlertTriangle className="w-6 h-6" />
+              </div>
+
+              <h3 className="text-lg font-bold text-gray-900 mb-2">Delete Your Account?</h3>
+              <p className="text-xs text-gray-600 mb-4 leading-relaxed">
+                This action is <strong>permanent</strong>. Your profile details, saved addresses, and payment accounts will be deleted immediately.
+              </p>
+
+              <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 mb-4 text-[11px] text-amber-800">
+                <strong>Note:</strong> Active orders in transit must be completed or cancelled before deletion. Historical invoices and tax records are retained per statutory compliance.
+              </div>
+
+              <form onSubmit={handleDeleteAccount} className="space-y-4">
+                <div>
+                  <label className="text-[11px] font-bold text-gray-600 uppercase tracking-wide block mb-1">
+                    Enter Current Password to Confirm
+                  </label>
+                  <input
+                    type="password"
+                    value={deletePassword}
+                    onChange={(e) => setDeletePassword(e.target.value)}
+                    placeholder="Enter password"
+                    required
+                    className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-red-400 bg-gray-50"
+                  />
+                </div>
+
+                {deleteError && (
+                  <p className="text-xs text-red-600 font-semibold bg-red-50 p-2.5 rounded-lg border border-red-100">
+                    {deleteError}
+                  </p>
+                )}
+
+                <div className="flex gap-2 pt-2">
+                  <button
+                    type="button"
+                    onClick={() => setShowDeleteModal(false)}
+                    disabled={deleting}
+                    className="flex-1 py-2.5 rounded-xl border border-gray-200 text-sm font-semibold text-gray-700 hover:bg-gray-50 transition-colors"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={deleting}
+                    className="flex-1 py-2.5 rounded-xl bg-red-600 hover:bg-red-700 text-white text-sm font-bold shadow-md shadow-red-200 transition-colors disabled:opacity-60"
+                  >
+                    {deleting ? 'Deleting...' : 'Confirm Delete'}
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

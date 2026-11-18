@@ -5,15 +5,27 @@ import { Header } from '../components/Header';
 import { useCartStore } from '../store/useCartStore';
 import { useAuthStore } from '../store/useAuthStore';
 import { useToastStore } from '../store/useToastStore';
+import { registerPageBackHandler } from '../utils/backNavigation';
+import api from '../utils/api';
 import gsap from 'gsap';
 import { useGSAP } from '@gsap/react';
-
-const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || "http://localhost:5000/api";
 
 export function CheckoutPage() {
   const navigate = useNavigate();
   const location = useLocation();
-  const { items, getTotal, clearCart } = useCartStore();
+  const { 
+    items, 
+    clearCart, 
+    getSubtotal, 
+    deliveryCharge, 
+    platformFee, 
+    platformFeePercent, 
+    vendorShipments, 
+    shippingCalculatedForPincode,
+    deliveryPincode,
+    calculateRates, 
+    isCalculatingShipping 
+  } = useCartStore();
   const { token, user } = useAuthStore();
   const { showToast } = useToastStore();
   
@@ -24,11 +36,12 @@ export function CheckoutPage() {
     line1: '',
     city: '',
     state: '',
-    pincode: '',
+    pincode: location.state?.deliveryPincode || deliveryPincode || localStorage.getItem('cart_delivery_pincode') || '',
     mobile: user?.phone || ''
   });
   const [paymentMethod, setPaymentMethod] = useState('razorpay');
   const [isPlacingOrder, setIsPlacingOrder] = useState(false);
+  const [shippingError, setShippingError] = useState('');
   
   const overlayRef = useRef(null);
   const iconRef = useRef(null);
@@ -36,10 +49,56 @@ export function CheckoutPage() {
 
   const discount = location.state?.discount || 0;
   const couponCode = location.state?.couponCode || '';
-  const baseTotal = getTotal();
-  const grandTotal = Math.max(0, baseTotal - discount);
+  
+  const subtotal = getSubtotal();
+  const mrpTotal = items.reduce((sum, item) => sum + (Number(item.variant?.mrp || item.product?.mrp || item.variant?.price || item.product?.price || 0) * item.qty), 0);
+  const productSavings = Math.max(0, Math.round((mrpTotal - subtotal) * 100) / 100);
+  const baseBeforeFee = Math.max(0, (subtotal + deliveryCharge) - discount);
+  const currentPlatformFee = platformFee > 0 
+    ? platformFee 
+    : (subtotal > 0 ? Math.round(baseBeforeFee * (platformFeePercent / 100) * 100) / 100 : 0);
+  const grandTotal = Math.round((baseBeforeFee + currentPlatformFee) * 100) / 100;
 
-  const handleProceedToPayment = () => {
+  const handleBack = () => {
+    if (step === 3) {
+      setStep(2);
+    } else if (step === 2) {
+      if (token) {
+        navigate('/cart', { replace: true });
+      } else {
+        setStep(1);
+      }
+    } else {
+      navigate('/cart', { replace: true });
+    }
+  };
+
+  // Intercept centralized Android hardware back button & gestures while in Checkout
+  useEffect(() => {
+    const unregister = registerPageBackHandler(() => {
+      if (step === 3) {
+        setStep(2);
+        return true;
+      }
+      if (step === 2) {
+        if (token) {
+          navigate('/cart', { replace: true });
+          return true;
+        } else {
+          setStep(1);
+          return true;
+        }
+      }
+      if (step === 1) {
+        navigate('/cart', { replace: true });
+        return true;
+      }
+      return false;
+    });
+    return unregister;
+  }, [step, token, navigate]);
+
+  const handleProceedToPayment = async () => {
     if (!address.name.trim() || !address.line1.trim() || !address.city.trim() || !address.state.trim() || !address.pincode.trim() || !address.mobile.trim()) {
       showToast("Please fill in all required address fields.", "error");
       return;
@@ -52,6 +111,26 @@ export function CheckoutPage() {
       showToast("Mobile number must be exactly 10 digits.", "error");
       return;
     }
+
+    const cleanPin = address.pincode.trim();
+    if (cleanPin !== shippingCalculatedForPincode || deliveryCharge <= 0) {
+      setShippingError('');
+      try {
+        const res = await calculateRates(cleanPin, paymentMethod === 'cod', discount);
+        if (!res || !res.success) {
+          const err = res?.error || "Unable to fetch courier delivery rate for this pincode. Please check your pincode and retry.";
+          setShippingError(err);
+          showToast(err, "error");
+          return;
+        }
+      } catch (err) {
+        const msg = err.response?.data?.error || err.message || "Failed to calculate courier charges. Please retry.";
+        setShippingError(msg);
+        showToast(msg, "error");
+        return;
+      }
+    }
+
     setStep(3);
   };
 
@@ -62,12 +141,17 @@ export function CheckoutPage() {
     }
   }, [items, navigate, isPlacingOrder]);
 
-  // If user logs in mid-way
+  // If user logs in mid-way, advance from Auth to Address without wiping entered data
   useEffect(() => {
     if (token && step === 1) {
       setStep(2);
       if (user) {
-        setAddress(prev => ({ ...prev, name: user.name, mobile: user.phone }));
+        setAddress(prev => ({
+          ...prev,
+          name: prev.name || user.name || '',
+          email: prev.email || user.email || '',
+          mobile: prev.mobile || user.phone || ''
+        }));
       }
     }
   }, [token, step, user]);
@@ -85,6 +169,9 @@ export function CheckoutPage() {
 
   const loadRazorpay = () => {
     return new Promise((resolve) => {
+      if (window.Razorpay) {
+        return resolve(true);
+      }
       const script = document.createElement('script');
       script.src = 'https://checkout.razorpay.com/v1/checkout.js';
       script.onload = () => resolve(true);
@@ -96,22 +183,24 @@ export function CheckoutPage() {
   const COD_ADVANCE = 1;
   const codRemaining = grandTotal - COD_ADVANCE;
 
-  const createOrder = async (pMethod) => {
-    const endpoint = token ? `${BACKEND_URL}/auth/orders` : `${BACKEND_URL}/general/orders`;
-    const headers = { 'Content-Type': 'application/json' };
-    if (token) headers['Authorization'] = `Bearer ${token}`;
-    const res = await fetch(endpoint, {
-      method: 'POST',
-      headers,
-      body: JSON.stringify({
-        items,
-        address,
-        total: grandTotal,
-        coupon_code: couponCode,
-        payment_method: pMethod,
-      })
+  const createOrder = async (pMethod, paymentDetails = {}) => {
+    const endpoint = token ? '/auth/orders' : '/general/orders';
+    const res = await api.post(endpoint, {
+      items,
+      address,
+      subtotal,
+      delivery_charge: deliveryCharge,
+      platform_fee: currentPlatformFee,
+      discount_amount: discount,
+      total: grandTotal,
+      cod_collectible_amount: pMethod === 'cod' ? codRemaining : 0,
+      coupon_code: couponCode,
+      payment_method: pMethod,
+      razorpay_payment_id: paymentDetails.razorpay_payment_id || null,
+      razorpay_order_id: paymentDetails.razorpay_order_id || null,
+      razorpay_signature: paymentDetails.razorpay_signature || null,
     });
-    return res.json();
+    return res.data;
   };
 
   const handlePlaceOrder = async () => {
@@ -127,13 +216,24 @@ export function CheckoutPage() {
       // Amount to charge online: ₹1 for COD, full amount for prepaid
       const chargeAmount = paymentMethod === 'cod' ? COD_ADVANCE : grandTotal;
 
-      // Create Razorpay Order
-      const orderRes = await fetch(`${BACKEND_URL}/general/razorpay/order`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ amount: chargeAmount })
-      });
-      const orderData = await orderRes.json();
+      // Create Razorpay Order with authoritative payload for backend verification
+      let orderRes;
+      try {
+        orderRes = await api.post('/general/razorpay/order', { 
+          amount: chargeAmount,
+          items,
+          delivery_charge: deliveryCharge,
+          coupon_code: couponCode,
+          payment_method: paymentMethod
+        });
+      } catch (orderApiErr) {
+        const errorMsg = orderApiErr.response?.data?.error || orderApiErr.message || 'Failed to create payment order';
+        alert(errorMsg);
+        setIsPlacingOrder(false);
+        return;
+      }
+
+      const orderData = orderRes.data;
 
       if (!orderData.success) {
         alert('Failed to initialize payment');
@@ -142,7 +242,7 @@ export function CheckoutPage() {
       }
 
       const options = {
-        key: import.meta.env.VITE_RAZORPAY_KEY_ID,
+        key: orderData.key || import.meta.env.VITE_RAZORPAY_KEY_ID,
         amount: orderData.order.amount,
         currency: orderData.order.currency,
         name: 'Tradition Store',
@@ -153,26 +253,27 @@ export function CheckoutPage() {
         handler: async function (response) {
           try {
             // Verify payment
-            const verifyRes = await fetch(`${BACKEND_URL}/general/razorpay/verify`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                razorpay_order_id: response.razorpay_order_id,
-                razorpay_payment_id: response.razorpay_payment_id,
-                razorpay_signature: response.razorpay_signature
-              })
+            const verifyRes = await api.post('/general/razorpay/verify', {
+              razorpay_order_id: response.razorpay_order_id,
+              razorpay_payment_id: response.razorpay_payment_id,
+              razorpay_signature: response.razorpay_signature
             });
-            const verifyData = await verifyRes.json();
+            const verifyData = verifyRes.data;
 
             if (verifyData.success) {
-              const createOrderData = await createOrder(paymentMethod);
-              if (createOrderData.success) {
+              const createOrderData = await createOrder(paymentMethod, {
+                razorpay_order_id: response.razorpay_order_id,
+                razorpay_payment_id: response.razorpay_payment_id,
+                razorpay_signature: response.razorpay_signature,
+              });
+              if (createOrderData.success && createOrderData.order) {
+                showToast("Order placed successfully!", "success");
+                clearCart();
                 setTimeout(() => {
-                  clearCart();
-                  navigate(`/order-tracking/${createOrderData.order.order_number}`);
-                }, 2000);
+                  navigate(`/order-tracking/${createOrderData.order.order_number}`, { replace: true });
+                }, 1000);
               } else {
-                alert('Failed to place order after payment.');
+                showToast('Failed to place order after payment. Please contact support.', 'error');
                 setIsPlacingOrder(false);
               }
             } else {
@@ -180,12 +281,14 @@ export function CheckoutPage() {
               setIsPlacingOrder(false);
             }
           } catch (err) {
-            console.error(err);
+            console.error('Order creation after payment error:', err);
+            alert('Payment completed, but order confirmation encountered an issue. Please contact support with payment ID: ' + response.razorpay_payment_id);
             setIsPlacingOrder(false);
           }
         },
         prefill: {
           name: address.name,
+          email: address.email || user?.email || '',
           contact: address.mobile
         },
         theme: { color: '#0b162c' },
@@ -238,13 +341,28 @@ export function CheckoutPage() {
     <div className="min-h-screen bg-transparent pb-36 font-sans">
       {/* Mobile App Bar */}
       <div className="sticky top-0 z-50 bg-white border-b border-gray-100 px-4 py-4 flex items-center justify-center md:hidden">
-        <button onClick={() => step === 3 ? setStep(2) : step === 2 ? setStep(1) : navigate('/cart')} className="absolute left-4 p-2 -ml-2 text-gray-900 hover:bg-gray-100 rounded-full transition-colors border border-transparent hover:border-gray-200">
+        <button
+          onClick={handleBack}
+          className="absolute left-4 p-2 -ml-2 text-gray-900 hover:bg-gray-100 rounded-full transition-colors border border-transparent hover:border-gray-200"
+          aria-label="Back"
+        >
           <ChevronLeft className="w-6 h-6" />
         </button>
         <h1 className="font-bold text-lg text-gray-900 tracking-wide">Checkout</h1>
       </div>
       
       <div className="p-4 md:p-8 space-y-4 md:space-y-8 md:max-w-7xl mx-auto">
+        {/* Desktop Back Navigation */}
+        <div className="hidden md:flex items-center gap-3">
+          <button
+            onClick={handleBack}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white hover:bg-gray-50 text-gray-700 hover:text-gray-900 text-xs font-semibold rounded-full border border-gray-200 transition-colors shadow-xs"
+          >
+            <ChevronLeft className="w-4 h-4" />
+            <span>{step === 3 ? 'Back to Address' : 'Back to Cart'}</span>
+          </button>
+        </div>
+
         {renderStepIndicator()}
 
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 md:gap-12 items-start">
@@ -426,23 +544,79 @@ export function CheckoutPage() {
                     <div>
                       <h4 className="text-sm font-bold text-gray-900 line-clamp-1">{item.product.name}</h4>
                       <p className="text-xs text-gray-600 mt-1">Qty: {item.qty} | {item.variant?.size || 'Std'}</p>
-                      <p className="text-sm font-bold text-brand-blue mt-1">₹{(item.variant?.price || item.product.price) * item.qty}</p>
+                      <div className="flex items-baseline gap-1.5 mt-1">
+                        <span className="text-sm font-bold text-brand-blue">₹{((item.variant?.price || item.product.price || 0) * item.qty).toLocaleString('en-IN')}</span>
+                        {(() => {
+                          const iPrice = Number(item.variant?.price || item.product?.price || 0);
+                          const iMrp = Number(item.variant?.mrp || item.product?.mrp || iPrice);
+                          if (iMrp > iPrice) {
+                            return (
+                              <span className="text-[11px] text-gray-400 line-through">₹{(iMrp * item.qty).toLocaleString('en-IN')}</span>
+                            );
+                          }
+                          return null;
+                        })()}
+                      </div>
                     </div>
                   </div>
                 ))}
               </div>
 
-              <div className="border-t border-dashed border-gray-200 pt-5 mb-6">
-                {discount > 0 && (
-                  <div className="flex justify-between font-bold text-gray-700 text-sm mb-3">
-                    <span>Coupon Discount</span>
-                    <span className="text-green-600">-₹{discount.toFixed(2)}</span>
+              <div className="border-t border-dashed border-gray-200 pt-4 mb-5 space-y-2.5">
+                {productSavings > 0 ? (
+                  <>
+                    <div className="flex justify-between text-xs sm:text-sm text-gray-600">
+                      <span>Total MRP</span>
+                      <span className="font-semibold text-gray-900">₹{mrpTotal.toFixed(2)}</span>
+                    </div>
+                    <div className="flex justify-between text-xs sm:text-sm text-emerald-600 font-semibold">
+                      <span>Product Discount</span>
+                      <span>-₹{productSavings.toFixed(2)}</span>
+                    </div>
+                    <div className="flex justify-between text-xs sm:text-sm text-gray-600">
+                      <span>Product Subtotal</span>
+                      <span className="font-semibold text-gray-900">₹{subtotal.toFixed(2)}</span>
+                    </div>
+                  </>
+                ) : (
+                  <div className="flex justify-between text-xs sm:text-sm text-gray-600">
+                    <span>Product Subtotal</span>
+                    <span className="font-semibold text-gray-900">₹{subtotal.toFixed(2)}</span>
                   </div>
                 )}
-                <div className="flex justify-between font-extrabold text-gray-900 text-xl">
+                <div className="flex justify-between text-xs sm:text-sm text-gray-600">
+                  <span>Delivery Charges</span>
+                  <span className="font-semibold text-gray-900">
+                    {deliveryCharge > 0 ? `₹${deliveryCharge.toFixed(2)}` : 'Calculated at Step 3'}
+                  </span>
+                </div>
+                <div className="flex justify-between text-xs sm:text-sm text-gray-600">
+                  <span>Platform Fee ({platformFeePercent}%)</span>
+                  <span className="font-semibold text-gray-900">₹{currentPlatformFee.toFixed(2)}</span>
+                </div>
+                {discount > 0 && (
+                  <div className="flex justify-between text-xs sm:text-sm text-emerald-600 font-semibold">
+                    <span>Coupon Discount</span>
+                    <span>-₹{discount.toFixed(2)}</span>
+                  </div>
+                )}
+                <div className="flex justify-between font-extrabold text-gray-900 text-lg sm:text-xl pt-2 border-t border-gray-100">
                   <span>Grand Total</span>
                   <span className="text-brand-navy">₹{grandTotal.toFixed(2)}</span>
                 </div>
+
+                {paymentMethod === 'cod' && (
+                  <div className="mt-3 p-3 bg-emerald-50 border border-emerald-200 rounded-xl space-y-1 text-xs">
+                    <div className="flex justify-between font-medium text-emerald-900">
+                      <span>Online Confirmation Advance:</span>
+                      <strong className="font-bold">₹{COD_ADVANCE.toFixed(2)}</strong>
+                    </div>
+                    <div className="flex justify-between font-medium text-emerald-900">
+                      <span>Doorstep Cash on Delivery:</span>
+                      <strong className="font-bold">₹{codRemaining.toFixed(2)}</strong>
+                    </div>
+                  </div>
+                )}
               </div>
 
               {step === 1 ? (

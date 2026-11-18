@@ -107,10 +107,14 @@ export function VendorSupportPage() {
     }
   };
 
-  const filteredTickets = tickets.filter(t => 
-    t.subject.toLowerCase().includes(searchTerm.toLowerCase()) || 
-    t.id.toLowerCase().includes(searchTerm.toLowerCase())
-  ).sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+  const filteredTickets = tickets.filter(t => {
+    if (!searchTerm) return true;
+    const term = searchTerm.toLowerCase();
+    return (
+      (t.subject && String(t.subject).toLowerCase().includes(term)) || 
+      (t.id != null && String(t.id).toLowerCase().includes(term))
+    );
+  }).sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
 
   return (
     <div className="w-full max-w-5xl mx-auto space-y-6">
@@ -150,37 +154,61 @@ export function VendorSupportPage() {
             <p className="text-gray-400 text-sm">You haven't submitted any support tickets yet.</p>
           </div>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse">
-              <thead className="bg-gradient-to-r from-gray-50 to-white border-b border-gray-100">
-                <tr>
-                  <th className="px-8 py-5 font-bold text-xs uppercase tracking-wider text-gray-500">Ticket ID</th>
-                  <th className="px-8 py-5 font-bold text-xs uppercase tracking-wider text-gray-500">Subject</th>
-                  <th className="px-8 py-5 font-bold text-xs uppercase tracking-wider text-gray-500">Status</th>
-                  <th className="px-8 py-5 font-bold text-xs uppercase tracking-wider text-gray-500">Date</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-100/80">
-                {filteredTickets.map(ticket => (
-                  <tr key={ticket.id} className="hover:bg-gray-50/50 transition-all group">
-                    <td className="px-8 py-5">
-                      <span className="font-bold text-gray-900 group-hover:text-[#012980] transition-colors">{ticket.id}</span>
-                    </td>
-                    <td className="px-8 py-5">
-                      <p className="font-bold text-gray-900">{ticket.subject}</p>
-                      <p className="text-gray-500 text-sm mt-1 line-clamp-1 max-w-sm">{ticket.message}</p>
-                    </td>
-                    <td className="px-8 py-5">
-                      {getStatusBadge(ticket.status)}
-                    </td>
-                    <td className="px-8 py-5 text-sm font-medium text-gray-500">
-                      {new Date(ticket.created_at).toLocaleDateString()}
-                    </td>
+          <>
+            {/* Mobile Cards View (md:hidden) */}
+            <div className="md:hidden divide-y divide-gray-100">
+              {filteredTickets.map(ticket => (
+                <div key={ticket.id} className="p-4 space-y-2">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="font-mono font-bold text-gray-900 text-xs bg-gray-100 px-2.5 py-1 rounded-md">
+                      #{ticket.id}
+                    </span>
+                    {getStatusBadge(ticket.status)}
+                  </div>
+                  <div>
+                    <h4 className="font-bold text-gray-900 text-sm">{ticket.subject}</h4>
+                    <p className="text-gray-500 text-xs mt-1 line-clamp-2">{ticket.message}</p>
+                  </div>
+                  <div className="pt-1 text-[11px] text-gray-400">
+                    {new Date(ticket.created_at).toLocaleDateString()}
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* Desktop Table View (hidden md:block) */}
+            <div className="overflow-x-auto hidden md:block">
+              <table className="w-full text-left border-collapse">
+                <thead className="bg-gradient-to-r from-gray-50 to-white border-b border-gray-100">
+                  <tr>
+                    <th className="px-8 py-5 font-bold text-xs uppercase tracking-wider text-gray-500">Ticket ID</th>
+                    <th className="px-8 py-5 font-bold text-xs uppercase tracking-wider text-gray-500">Subject</th>
+                    <th className="px-8 py-5 font-bold text-xs uppercase tracking-wider text-gray-500">Status</th>
+                    <th className="px-8 py-5 font-bold text-xs uppercase tracking-wider text-gray-500">Date</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                </thead>
+                <tbody className="divide-y divide-gray-100/80">
+                  {filteredTickets.map(ticket => (
+                    <tr key={ticket.id} className="hover:bg-gray-50/50 transition-all group">
+                      <td className="px-8 py-5">
+                        <span className="font-bold text-gray-900 group-hover:text-[#012980] transition-colors">{ticket.id}</span>
+                      </td>
+                      <td className="px-8 py-5">
+                        <p className="font-bold text-gray-900">{ticket.subject}</p>
+                        <p className="text-gray-500 text-sm mt-1 line-clamp-1 max-w-sm">{ticket.message}</p>
+                      </td>
+                      <td className="px-8 py-5">
+                        {getStatusBadge(ticket.status)}
+                      </td>
+                      <td className="px-8 py-5 text-sm font-medium text-gray-500">
+                        {new Date(ticket.created_at).toLocaleDateString()}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </>
         )}
       </div>
     </div>

@@ -39,16 +39,16 @@ export function SearchPage() {
     if (!query) return false;
     const searchLower = query.toLowerCase();
     return (
-      product.name.toLowerCase().includes(searchLower) ||
-      product.category.toLowerCase().includes(searchLower) ||
-      (product.description && product.description.toLowerCase().includes(searchLower))
+      (product.name && String(product.name).toLowerCase().includes(searchLower)) ||
+      (product.category && String(product.category).toLowerCase().includes(searchLower)) ||
+      (product.description && String(product.description).toLowerCase().includes(searchLower))
     );
   });
 
   const filteredVendors = vendors?.filter(vendor => {
     if (!query) return false;
     const searchLower = query.toLowerCase();
-    return vendor.business_name?.toLowerCase().includes(searchLower);
+    return vendor.business_name && String(vendor.business_name).toLowerCase().includes(searchLower);
   });
 
   const handleTagClick = (tag) => {

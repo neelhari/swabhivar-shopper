@@ -56,11 +56,16 @@ export function AdminVendorProfilesPage() {
     }
   };
 
-  const filteredVendors = vendors.filter(v => 
-    v.store_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    v.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    v.email.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const filteredVendors = vendors.filter(v => {
+    if (!searchTerm) return true;
+    const term = searchTerm.toLowerCase();
+    return (
+      (v.store_name && String(v.store_name).toLowerCase().includes(term)) ||
+      (v.name && String(v.name).toLowerCase().includes(term)) ||
+      (v.email && String(v.email).toLowerCase().includes(term)) ||
+      (v.phone && String(v.phone).includes(term))
+    );
+  });
 
   return (
     <div className="space-y-6">

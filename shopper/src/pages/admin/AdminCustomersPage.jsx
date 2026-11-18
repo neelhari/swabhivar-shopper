@@ -45,12 +45,15 @@ export function AdminCustomersPage() {
     }
   };
 
-  const filtered = customers.filter(c => 
-    !search || 
-    (c.name && c.name.toLowerCase().includes(search.toLowerCase())) ||
-    (c.email && c.email.toLowerCase().includes(search.toLowerCase())) ||
-    (c.phone && c.phone.includes(search))
-  );
+  const filtered = customers.filter(c => {
+    if (!search) return true;
+    const term = search.toLowerCase();
+    return (
+      (c.name && String(c.name).toLowerCase().includes(term)) ||
+      (c.email && String(c.email).toLowerCase().includes(term)) ||
+      (c.phone && String(c.phone).includes(term))
+    );
+  });
 
   if (loading) return (
     <div className="flex items-center justify-center py-20">
@@ -92,7 +95,7 @@ export function AdminCustomersPage() {
                   <td className="py-4 px-4 sm:px-6">
                     <div className="flex items-center gap-3">
                       <div className="w-8 h-8 rounded-full bg-gray-50 flex items-center justify-center text-gray-900 font-bold">
-                        {(customer.name || "U")[0].toUpperCase()}
+                        {String(customer.name?.trim() || "U")[0].toUpperCase()}
                       </div>
                       <div>
                         <p className="font-semibold text-gray-900">{customer.name || "Unknown User"}</p>
@@ -164,7 +167,7 @@ export function AdminCustomersPage() {
                   {/* Basic Info */}
                   <div className="bg-gray-50 p-4 rounded-xl flex gap-4 items-center">
                     <div className="w-16 h-16 rounded-full bg-gray-200 flex items-center justify-center text-2xl font-bold text-gray-600">
-                      {(selectedCustomer.name || "U")[0].toUpperCase()}
+                      {String(selectedCustomer.name?.trim() || "U")[0].toUpperCase()}
                     </div>
                     <div>
                       <h3 className="text-lg font-bold text-gray-900">{selectedCustomer.name}</h3>

@@ -7,21 +7,20 @@ import { Link } from 'react-router-dom';
 
 export function ProductCarousel({ title = "You May Also Like", maxItems = 4, categoryId = null }) {
   const container = useRef();
-  
+
   // Filter products, ensure we don't show the exact same category if it's too small, just get random/featured if needed
-  let displayProducts = categoryId 
+  let displayProducts = categoryId
     ? products.filter(p => p.categoryId === categoryId)
     : [...products].sort(() => 0.5 - Math.random());
-    
+
   if (displayProducts.length < 2) {
     displayProducts = [...products].sort(() => 0.5 - Math.random());
   }
-  
+
   displayProducts = displayProducts.slice(0, maxItems);
 
-  if (displayProducts.length === 0) return null;
-
   useGSAP(() => {
+    if (displayProducts.length === 0 || !container.current) return;
     gsap.from('.carousel-item', {
       scrollTrigger: {
         trigger: container.current,
@@ -34,6 +33,8 @@ export function ProductCarousel({ title = "You May Also Like", maxItems = 4, cat
       ease: 'power3.out'
     });
   }, { scope: container });
+
+  if (displayProducts.length === 0) return null;
 
   return (
     <div ref={container} className="py-16 md:py-24 border-t border-gray-100 mt-12 w-full">

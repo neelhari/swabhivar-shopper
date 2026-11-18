@@ -59,11 +59,16 @@ export function AdminVendorRequestsPage() {
     }
   };
 
-  const filteredRequests = requests.filter(req => 
-    req.store_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    req.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    req.email.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const filteredRequests = requests.filter(req => {
+    if (!searchTerm) return true;
+    const term = searchTerm.toLowerCase();
+    return (
+      (req.store_name && String(req.store_name).toLowerCase().includes(term)) ||
+      (req.name && String(req.name).toLowerCase().includes(term)) ||
+      (req.email && String(req.email).toLowerCase().includes(term)) ||
+      (req.phone && String(req.phone).includes(term))
+    );
+  });
 
   return (
     <div className="space-y-6">

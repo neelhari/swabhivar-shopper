@@ -63,7 +63,7 @@ export function BottomNav() {
       )
     },
     {
-      name: 'My Account',
+      name: 'Account',
       path: token ? '/dashboard' : '/login',
       active: isActive(['/dashboard', '/profile', '/my-addresses', '/account-settings', '/login', '/my-orders']),
       icon: (active) => (
@@ -94,7 +94,7 @@ export function BottomNav() {
                 {tab.icon(tab.active)}
               </div>
             </div>
-            <span className={`text-[10px] font-medium tracking-wide transition-colors duration-300 ${tab.active ? 'text-brand-navy' : 'text-gray-400'}`}>
+            <span className={`text-[10px] font-medium tracking-wide transition-colors duration-300 whitespace-nowrap text-center ${tab.active ? 'text-brand-navy' : 'text-gray-400'}`}>
               {tab.name}
             </span>
           </NavLink>

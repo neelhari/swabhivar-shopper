@@ -1,9 +1,15 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Package, ShoppingBag, FileText, RefreshCw } from 'lucide-react';
+import { 
+  Package, ShoppingBag, FileText, RefreshCw, RotateCcw, 
+  AlertCircle, CheckCircle2, Clock, Upload, Send, MessageSquare, 
+  Truck, ArrowRight, ShieldAlert, X, ChevronRight, ChevronLeft, Image as ImageIcon
+} from 'lucide-react';
 import { useAuthStore } from '../store/useAuthStore';
 import { useCartStore } from '../store/useCartStore';
 import { Header } from '../components/Header';
+import { registerModal, navigateBackSafe } from '../utils/backNavigation';
+import axios from 'axios';
 
 const STATUS_COLORS = {
   pending: 'bg-yellow-100 text-yellow-700 border-yellow-200',
@@ -15,15 +21,260 @@ const STATUS_COLORS = {
 
 const STATUS_STEPS = ['pending', 'processing', 'shipped', 'delivered'];
 
+const RETURN_REASONS = [
+  'Defective or damaged product',
+  'Wrong item or variant delivered',
+  'Item does not match description',
+  'Quality issue / poor finishing',
+  'Size or fit problem',
+  'Missing parts or accessories',
+  'Other genuine issue'
+];
+
 export function MyOrdersPage() {
   const navigate = useNavigate();
   const { token, orders, fetchProfile, user } = useAuthStore();
   const addToCart = useCartStore(state => state.addToCart);
 
+  // Return & Refund State
+  const [returnsMap, setReturnsMap] = useState({}); // keyed by order_id
+  const [activeModal, setActiveModal] = useState(null); // 'request' | 'details' | 'appeal' | null
+  const [selectedOrder, setSelectedOrder] = useState(null);
+  const [selectedReturn, setSelectedReturn] = useState(null);
+  
+  // Request Form
+  const [returnReason, setReturnReason] = useState('');
+  const [returnDescription, setReturnDescription] = useState('');
+  const [returnImages, setReturnImages] = useState([]);
+  const [uploadingImage, setUploadingImage] = useState(false);
+  const [submittingReturn, setSubmittingReturn] = useState(false);
+  const [formError, setFormError] = useState('');
+
+  // Shipping Form
+  const [courierName, setCourierName] = useState('');
+  const [trackingNumber, setTrackingNumber] = useState('');
+  const [submittingShip, setSubmittingShip] = useState(false);
+
+  // Appeal Form
+  const [appealReason, setAppealReason] = useState('');
+  const [submittingAppeal, setSubmittingAppeal] = useState(false);
+
+  // Message Form
+  const [newMessage, setNewMessage] = useState('');
+  const [sendingMessage, setSendingMessage] = useState(false);
+
   useEffect(() => {
     if (!token) { navigate('/login'); return; }
     fetchProfile();
+    fetchCustomerReturns();
   }, [token]);
+
+  // Close return/appeal modal on back action
+  useEffect(() => {
+    if (!activeModal) return;
+    return registerModal(() => setActiveModal(null));
+  }, [activeModal]);
+
+  const fetchCustomerReturns = async () => {
+    try {
+      const res = await axios.get('/api/returns/my-returns', {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (res.data && res.data.returns) {
+        const map = {};
+        res.data.returns.forEach(r => {
+          map[r.order_id] = r;
+        });
+        setReturnsMap(map);
+      }
+    } catch (err) {
+      console.error('Failed to load return requests:', err);
+    }
+  };
+
+  const reloadReturnDetails = async (returnId) => {
+    try {
+      const res = await axios.get(`/api/returns/${returnId}`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (res.data && res.data.returnRequest) {
+        setSelectedReturn(res.data.returnRequest);
+        setReturnsMap(prev => ({ ...prev, [res.data.returnRequest.order_id]: res.data.returnRequest }));
+      }
+    } catch (err) {
+      console.error('Failed to refresh return details:', err);
+    }
+  };
+
+  // Eligibility check (7-day window from delivered_at or created_at if delivered)
+  const isReturnEligible = (order) => {
+    if (order.status !== 'delivered') return { eligible: false, reason: 'Only delivered orders can be returned' };
+    const deliveredDate = new Date(order.delivered_at || order.created_at);
+    const now = new Date();
+    const diffDays = (now - deliveredDate) / (1000 * 60 * 60 * 24);
+    if (diffDays > 7) {
+      return { eligible: false, reason: '7-day return window expired' };
+    }
+    return { eligible: true, daysLeft: Math.max(0, 7 - Math.floor(diffDays)) };
+  };
+
+  const handleOpenRequestModal = (order) => {
+    setSelectedOrder(order);
+    setReturnReason(RETURN_REASONS[0]);
+    setReturnDescription('');
+    setReturnImages([]);
+    setFormError('');
+    setActiveModal('request');
+  };
+
+  const handleOpenDetailsModal = async (ret) => {
+    setSelectedReturn(ret);
+    setActiveModal('details');
+    // Refresh full details including messages
+    reloadReturnDetails(ret.id);
+  };
+
+  const handleImageUpload = async (e) => {
+    const files = Array.from(e.target.files);
+    if (!files.length) return;
+    if (returnImages.length + files.length > 5) {
+      setFormError('You can upload up to 5 images maximum');
+      return;
+    }
+
+    setUploadingImage(true);
+    setFormError('');
+    try {
+      for (const file of files) {
+        const formData = new FormData();
+        formData.append('image', file);
+        formData.append('folder', 'returns');
+        const res = await axios.post('/api/upload', formData, {
+          headers: {
+            'Content-Type': 'multipart/form-data',
+            Authorization: `Bearer ${token}`
+          }
+        });
+        if (res.data && res.data.url) {
+          setReturnImages(prev => [...prev, res.data.url]);
+        }
+      }
+    } catch (err) {
+      setFormError(err.response?.data?.message || 'Failed to upload image. Please try again.');
+    } finally {
+      setUploadingImage(false);
+    }
+  };
+
+  const handleSubmitReturn = async (e) => {
+    e.preventDefault();
+    if (!returnReason) { setFormError('Please select a return reason'); return; }
+    if (!returnDescription.trim()) { setFormError('Please provide a brief description of the issue'); return; }
+
+    setSubmittingReturn(true);
+    setFormError('');
+    try {
+      let items = [];
+      try {
+        items = typeof selectedOrder.items === 'string' ? JSON.parse(selectedOrder.items) : (selectedOrder.items || []);
+      } catch (e) {
+        items = [];
+      }
+
+      const payload = {
+        order_id: selectedOrder.id,
+        reason: returnReason,
+        description: returnDescription.trim(),
+        images: returnImages,
+        items: items
+      };
+
+      const res = await axios.post('/api/returns/request', payload, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+
+      if (res.data && res.data.returnRequest) {
+        setReturnsMap(prev => ({ ...prev, [selectedOrder.id]: res.data.returnRequest }));
+        setSelectedReturn(res.data.returnRequest);
+        setActiveModal('details');
+      }
+    } catch (err) {
+      setFormError(err.response?.data?.message || 'Failed to submit return request. Please try again.');
+    } finally {
+      setSubmittingReturn(false);
+    }
+  };
+
+  const handleShipReturn = async (e) => {
+    e.preventDefault();
+    if (!courierName.trim() || !trackingNumber.trim()) return;
+
+    setSubmittingShip(true);
+    try {
+      const res = await axios.post(`/api/returns/${selectedReturn.id}/ship`, {
+        return_courier: courierName.trim(),
+        return_tracking_id: trackingNumber.trim()
+      }, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+
+      if (res.data && res.data.returnRequest) {
+        setSelectedReturn(res.data.returnRequest);
+        setReturnsMap(prev => ({ ...prev, [selectedReturn.order_id]: res.data.returnRequest }));
+        setCourierName('');
+        setTrackingNumber('');
+      }
+    } catch (err) {
+      alert(err.response?.data?.message || 'Failed to submit shipping info');
+    } finally {
+      setSubmittingShip(false);
+    }
+  };
+
+  const handleAppeal = async (e) => {
+    e.preventDefault();
+    if (!appealReason.trim()) return;
+
+    setSubmittingAppeal(true);
+    try {
+      const res = await axios.post(`/api/returns/${selectedReturn.id}/appeal`, {
+        appeal_reason: appealReason.trim()
+      }, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+
+      if (res.data && res.data.returnRequest) {
+        setSelectedReturn(res.data.returnRequest);
+        setReturnsMap(prev => ({ ...prev, [selectedReturn.order_id]: res.data.returnRequest }));
+        setActiveModal('details');
+        setAppealReason('');
+      }
+    } catch (err) {
+      alert(err.response?.data?.message || 'Failed to submit appeal');
+    } finally {
+      setSubmittingAppeal(false);
+    }
+  };
+
+  const handleSendMessage = async (e) => {
+    e.preventDefault();
+    if (!newMessage.trim()) return;
+
+    setSendingMessage(true);
+    try {
+      await axios.post(`/api/returns/${selectedReturn.id}/message`, {
+        message: newMessage.trim()
+      }, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      setNewMessage('');
+      reloadReturnDetails(selectedReturn.id);
+    } catch (err) {
+      alert(err.response?.data?.message || 'Failed to send message');
+    } finally {
+      setSendingMessage(false);
+    }
+  };
 
   const escapeHtml = (value) =>
     String(value ?? "")
@@ -193,7 +444,6 @@ export function MyOrdersPage() {
     try { items = typeof order.items === 'string' ? JSON.parse(order.items) : (order.items || []); } catch(e) {}
     
     items.forEach(item => {
-      // Reconstruct the product/variant object expected by addToCart
       const productObj = item.product || { id: item.id, name: item.name, price: item.price, image_url: item.image_url };
       const variantObj = item.variant || null;
       addToCart(productObj, variantObj, item.qty);
@@ -208,7 +458,19 @@ export function MyOrdersPage() {
 
       <div className="max-w-4xl mx-auto px-4 py-8 space-y-6">
         <div className="flex items-center justify-between mb-2">
-          <h2 className="text-2xl font-serif font-bold text-[#012980]">Order History</h2>
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => navigateBackSafe(navigate, '/profile')}
+              className="p-2 -ml-2 text-gray-700 hover:text-gray-900 hover:bg-gray-100 rounded-full transition-colors border border-gray-200 bg-white shadow-xs"
+              aria-label="Back"
+            >
+              <ChevronLeft className="w-5 h-5" />
+            </button>
+            <div>
+              <h2 className="text-2xl font-serif font-bold text-[#012980]">Order History</h2>
+              <p className="text-xs text-gray-500 mt-0.5">Track your past purchases, download invoices, or initiate returns</p>
+            </div>
+          </div>
           <span className="text-sm font-semibold text-[#012980] bg-blue-50/50 px-3 py-1 rounded-full border border-brand-navy/20">{orders.length} Orders</span>
         </div>
 
@@ -218,7 +480,7 @@ export function MyOrdersPage() {
               <ShoppingBag className="w-12 h-12 text-brand-navy" />
             </div>
             <p className="text-[#012980] font-bold text-lg font-serif">No orders yet</p>
-            <p className="text-sm text-gray-500 text-center max-w-sm">Looks like you haven't made your first order. Explore our spiritual collection today!</p>
+            <p className="text-sm text-gray-500 text-center max-w-sm">Looks like you haven't made your first order. Explore our catalog today!</p>
             <Link to="/" className="mt-4 bg-gradient-to-r from-brand-navy to-blue-500 text-white text-sm font-bold px-8 py-3 rounded-xl shadow-md hover:shadow-lg transition-all hover:-translate-y-0.5">
               Start Shopping
             </Link>
@@ -226,13 +488,30 @@ export function MyOrdersPage() {
         ) : (
           orders.map((order) => {
             const stepIdx = STATUS_STEPS.indexOf(order.status);
+            const activeReturn = returnsMap[order.id];
+            const eligibility = isReturnEligible(order);
+
             return (
               <div key={order.id} className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden hover:shadow-md transition-shadow">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 px-6 py-4 border-b border-[#001d5a] bg-[#012980]">
                   <div>
-                    <p className="text-sm font-bold text-brand-navy font-serif">Order #{order.order_number || order.id}</p>
-                    <p className="text-xs text-gray-300 mt-1">
+                    <div className="flex items-center gap-2">
+                      <p className="text-sm font-bold text-white font-serif">Order #{order.order_number || order.id}</p>
+                      {activeReturn && (
+                        <span className={`text-[11px] font-bold px-2.5 py-0.5 rounded-full border ${
+                          activeReturn.status === 'Return Approved' || activeReturn.status === 'Refund Completed'
+                            ? 'bg-emerald-500/20 text-emerald-200 border-emerald-400'
+                            : activeReturn.status === 'Return Rejected'
+                            ? 'bg-rose-500/20 text-rose-200 border-rose-400'
+                            : 'bg-amber-500/20 text-amber-200 border-amber-400'
+                        }`}>
+                          Return: {activeReturn.status}
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-xs text-blue-200 mt-1">
                       Placed on {new Date(order.created_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' })}
+                      {order.delivered_at && ` • Delivered on ${new Date(order.delivered_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}`}
                     </p>
                   </div>
                   <div className="flex items-center gap-3">
@@ -304,15 +583,103 @@ export function MyOrdersPage() {
                   </div>
                 </div>
 
+                {/* Shipment Tracking Details */}
+                {(order.tracking_id || order.platform_awb || (order.shipments && order.shipments.length > 0)) && (
+                  <div className="px-6 py-3.5 bg-blue-50/70 border-t border-blue-100 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                    <div className="flex items-center gap-2.5">
+                      <div className="p-1.5 rounded-lg bg-[#012980] text-white">
+                        <Truck className="w-4 h-4" />
+                      </div>
+                      <div>
+                        <p className="text-xs font-bold text-gray-900">Shipment Dispatched & In Transit</p>
+                        <p className="text-[11px] text-gray-500">
+                          {order.shipments && order.shipments.length > 0
+                            ? `${order.shipments.length} package(s) dispatched with Shiprocket`
+                            : `Courier: ${order.platform_courier_name || 'Shiprocket Courier'} • AWB: ${order.tracking_id || order.platform_awb}`}
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-2 flex-wrap">
+                      {order.tracking_link && (
+                        <a
+                          href={order.tracking_link}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="inline-flex items-center gap-1 px-3 py-1.5 bg-[#012980] text-white rounded-xl text-xs font-bold hover:bg-blue-900 transition shadow-2xs"
+                        >
+                          <span>Track Package</span>
+                          <ExternalLink className="w-3.5 h-3.5" />
+                        </a>
+                      )}
+                      {order.shipments && order.shipments.map(s => s.tracking_url && (
+                        <a
+                          key={s.id}
+                          href={s.tracking_url}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="inline-flex items-center gap-1 px-3 py-1.5 bg-white text-blue-900 border border-blue-200 rounded-xl text-xs font-bold hover:bg-blue-50 transition shadow-2xs"
+                        >
+                          <span>Track {s.courier_name || 'Package'} ({s.awb_code})</span>
+                          <ExternalLink className="w-3.5 h-3.5" />
+                        </a>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Return Status Alert / Policy banner if applicable */}
+                {activeReturn ? (
+                  <div className="px-6 py-3 bg-amber-50/60 border-t border-amber-200/50 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
+                    <div className="flex items-center gap-2">
+                      <Clock className="w-4 h-4 text-amber-600 shrink-0" />
+                      <p className="text-xs text-amber-900 font-medium">
+                        Return Status: <strong className="font-semibold text-amber-950">{activeReturn.status}</strong>
+                        {activeReturn.vendor_response && ` — "${activeReturn.vendor_response}"`}
+                      </p>
+                    </div>
+                    <button
+                      onClick={() => handleOpenDetailsModal(activeReturn)}
+                      className="text-xs font-bold text-[#012980] hover:underline flex items-center gap-1"
+                    >
+                      Track Return & Chat <ChevronRight className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                ) : eligibility.eligible && (
+                  <div className="px-6 py-2.5 bg-blue-50/40 border-t border-blue-100 flex items-center justify-between text-xs text-blue-900">
+                    <span className="flex items-center gap-1.5 text-blue-800">
+                      <CheckCircle2 className="w-3.5 h-3.5 text-blue-600" />
+                      Eligible for return ({eligibility.daysLeft} days remaining of 7-day window)
+                    </span>
+                  </div>
+                )}
+
                 {/* Footer Actions */}
-                <div className="flex flex-col sm:flex-row items-center justify-end gap-3 px-6 py-4 bg-blue-50/50 border-t border-brand-navy/20">
+                <div className="flex flex-wrap items-center justify-end gap-3 px-6 py-4 bg-gray-50 border-t border-gray-100">
+                  {/* Return Buttons */}
+                  {activeReturn ? (
+                    <button
+                      onClick={() => handleOpenDetailsModal(activeReturn)}
+                      className="flex items-center gap-2 bg-amber-600 text-white px-4 py-2 rounded-xl text-xs font-bold hover:bg-amber-700 transition shadow-sm"
+                    >
+                      <RotateCcw className="w-3.5 h-3.5" /> View Return Details
+                    </button>
+                  ) : eligibility.eligible ? (
+                    <button
+                      onClick={() => handleOpenRequestModal(order)}
+                      className="flex items-center gap-2 bg-white text-rose-700 border border-rose-200 px-4 py-2 rounded-xl text-xs font-bold hover:bg-rose-50 transition shadow-sm"
+                    >
+                      <RotateCcw className="w-3.5 h-3.5" /> Return / Refund
+                    </button>
+                  ) : null}
+
                   <button onClick={() => openInvoice(order)}
-                    className="w-full sm:w-auto flex items-center justify-center gap-2 bg-white text-brand-navy border border-brand-navy/30 px-5 py-2.5 rounded-xl text-sm font-bold hover:bg-blue-50 transition-colors shadow-sm">
-                    <FileText className="w-4 h-4 text-brand-navy" /> Download Invoice
+                    className="flex items-center justify-center gap-2 bg-white text-brand-navy border border-brand-navy/30 px-4 py-2 rounded-xl text-xs font-bold hover:bg-blue-50 transition-colors shadow-sm">
+                    <FileText className="w-3.5 h-3.5 text-brand-navy" /> Invoice
                   </button>
                   <button onClick={() => handleReorder(order)}
-                    className="w-full sm:w-auto flex items-center justify-center gap-2 bg-[#012980] text-white px-5 py-2.5 rounded-xl text-sm font-bold hover:bg-[#033429] transition-colors shadow-sm">
-                    <RefreshCw className="w-4 h-4" /> Reorder Items
+                    className="flex items-center justify-center gap-2 bg-[#012980] text-white px-4 py-2 rounded-xl text-xs font-bold hover:bg-[#001d5a] transition-colors shadow-sm">
+                    <RefreshCw className="w-3.5 h-3.5" /> Reorder
                   </button>
                 </div>
               </div>
@@ -320,6 +687,358 @@ export function MyOrdersPage() {
           })
         )}
       </div>
+
+      {/* MODAL 1: REQUEST RETURN */}
+      {activeModal === 'request' && selectedOrder && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
+          <div className="bg-white rounded-3xl max-w-lg w-full p-6 shadow-2xl border border-gray-100 space-y-5 animate-in fade-in zoom-in duration-200 my-8">
+            <div className="flex items-center justify-between border-b pb-4">
+              <div>
+                <h3 className="text-lg font-serif font-bold text-[#012980]">Request Return / Refund</h3>
+                <p className="text-xs text-gray-500">Order #{selectedOrder.order_number || selectedOrder.id}</p>
+              </div>
+              <button onClick={() => setActiveModal(null)} className="p-1 rounded-full text-gray-400 hover:text-gray-700 hover:bg-gray-100">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {formError && (
+              <div className="p-3 bg-red-50 text-red-700 text-xs rounded-xl flex items-center gap-2">
+                <AlertCircle className="w-4 h-4 shrink-0" /> {formError}
+              </div>
+            )}
+
+            <form onSubmit={handleSubmitReturn} className="space-y-4">
+              <div>
+                <label className="block text-xs font-bold text-gray-700 mb-1">Reason for Return *</label>
+                <select
+                  value={returnReason}
+                  onChange={(e) => setReturnReason(e.target.value)}
+                  className="w-full text-xs p-3 rounded-xl border border-gray-300 focus:outline-none focus:ring-2 focus:ring-[#012980]"
+                  required
+                >
+                  {RETURN_REASONS.map(r => (
+                    <option key={r} value={r}>{r}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-gray-700 mb-1">Explain the Issue *</label>
+                <textarea
+                  value={returnDescription}
+                  onChange={(e) => setReturnDescription(e.target.value)}
+                  rows={3}
+                  placeholder="Please describe what is wrong with the product..."
+                  className="w-full text-xs p-3 rounded-xl border border-gray-300 focus:outline-none focus:ring-2 focus:ring-[#012980]"
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-gray-700 mb-1">Upload Product Photos (Up to 5)</label>
+                <div className="flex items-center gap-3">
+                  <label className="cursor-pointer flex items-center gap-2 px-3 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-xl text-xs font-semibold">
+                    <Upload className="w-4 h-4" />
+                    <span>{uploadingImage ? 'Uploading...' : 'Choose Photos'}</span>
+                    <input type="file" accept="image/*" multiple onChange={handleImageUpload} className="hidden" disabled={uploadingImage} />
+                  </label>
+                  <span className="text-xs text-gray-400">{returnImages.length} / 5 photos attached</span>
+                </div>
+
+                {returnImages.length > 0 && (
+                  <div className="flex flex-wrap gap-2 mt-3">
+                    {returnImages.map((img, idx) => (
+                      <div key={idx} className="relative w-16 h-16 rounded-xl border border-gray-200 overflow-hidden group">
+                        <img src={img} alt="Return proof" className="w-full h-full object-cover" />
+                        <button
+                          type="button"
+                          onClick={() => setReturnImages(prev => prev.filter((_, i) => i !== idx))}
+                          className="absolute inset-0 bg-black/50 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition"
+                        >
+                          <X className="w-4 h-4" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              <div className="p-3 bg-amber-50 rounded-xl text-[11px] text-amber-800 leading-relaxed border border-amber-100">
+                <strong>Policy Notice:</strong> Your request will be directly reviewed by the product vendor. Once approved, you will ship the item back, and upon receipt, your refund will be issued.
+              </div>
+
+              <div className="flex justify-end gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setActiveModal(null)}
+                  className="px-4 py-2 text-xs font-semibold text-gray-600 hover:bg-gray-100 rounded-xl"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={submittingReturn || uploadingImage}
+                  className="px-5 py-2 text-xs font-bold text-white bg-[#012980] hover:bg-[#001d5a] rounded-xl transition shadow-sm disabled:opacity-50"
+                >
+                  {submittingReturn ? 'Submitting...' : 'Submit Return Request'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL 2: RETURN DETAILS, TIMELINE & MESSAGING */}
+      {activeModal === 'details' && selectedReturn && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
+          <div className="bg-white rounded-3xl max-w-2xl w-full p-6 shadow-2xl border border-gray-100 space-y-6 my-8 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between border-b pb-4">
+              <div>
+                <div className="flex items-center gap-2">
+                  <h3 className="text-lg font-serif font-bold text-[#012980]">Return #{selectedReturn.id}</h3>
+                  <span className="text-xs font-bold px-3 py-1 rounded-full bg-blue-100 text-[#012980]">
+                    {selectedReturn.status}
+                  </span>
+                </div>
+                <p className="text-xs text-gray-500 mt-0.5">Order #{selectedReturn.order_number} • Vendor: {selectedReturn.store_name || selectedReturn.vendor_name}</p>
+              </div>
+              <button onClick={() => setActiveModal(null)} className="p-1 rounded-full text-gray-400 hover:text-gray-700 hover:bg-gray-100">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Status Highlight Banner */}
+            {selectedReturn.status === 'Return Approved' && (
+              <div className="p-4 bg-emerald-50 border border-emerald-200 rounded-2xl text-xs text-emerald-900 space-y-2">
+                <div className="flex items-center gap-2 font-bold text-emerald-950">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                  Your return request has been approved by the vendor!
+                </div>
+                <p>Please dispatch the item back to the vendor store and enter the courier name and tracking number below so the vendor can confirm receipt.</p>
+                <div className="p-2.5 bg-white/80 rounded-xl border border-emerald-200 text-[11px]">
+                  <strong>Return Address:</strong> {selectedReturn.store_name || selectedReturn.vendor_name}, {selectedReturn.vendor_email || ''}
+                </div>
+              </div>
+            )}
+
+            {selectedReturn.status === 'Return Rejected' && (
+              <div className="p-4 bg-rose-50 border border-rose-200 rounded-2xl text-xs text-rose-900 space-y-2">
+                <div className="flex items-center gap-2 font-bold text-rose-950">
+                  <AlertCircle className="w-4 h-4 text-rose-600" />
+                  Return request was rejected by vendor
+                </div>
+                <p><strong>Reason:</strong> {selectedReturn.rejection_reason || 'Item does not meet return conditions.'}</p>
+                {selectedReturn.vendor_response && <p><strong>Vendor Message:</strong> {selectedReturn.vendor_response}</p>}
+                
+                {!selectedReturn.appeal_reason && (
+                  <div className="pt-2">
+                    <button
+                      onClick={() => setActiveModal('appeal')}
+                      className="px-4 py-2 bg-rose-600 text-white font-bold rounded-xl text-xs hover:bg-rose-700 transition"
+                    >
+                      Disagree? Appeal to Admin
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {selectedReturn.status === 'Refund Completed' && (
+              <div className="p-4 bg-emerald-50 border border-emerald-200 rounded-2xl text-xs text-emerald-900 space-y-1">
+                <div className="flex items-center gap-2 font-bold text-emerald-950">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                  Refund Successfully Processed
+                </div>
+                <p>Amount: <strong>₹{Number(selectedReturn.refund_amount || 0).toLocaleString('en-IN')}</strong></p>
+                <p>Method: <strong className="capitalize">{selectedReturn.refund_method || 'Original Payment'}</strong></p>
+                {selectedReturn.refund_reference && <p>Reference / UTR: <strong className="font-mono">{selectedReturn.refund_reference}</strong></p>}
+                {selectedReturn.refunded_at && <p>Date: {new Date(selectedReturn.refunded_at).toLocaleString('en-IN')}</p>}
+              </div>
+            )}
+
+            {selectedReturn.status === 'Appeal Raised' && (
+              <div className="p-4 bg-purple-50 border border-purple-200 rounded-2xl text-xs text-purple-900 space-y-1">
+                <div className="flex items-center gap-2 font-bold text-purple-950">
+                  <ShieldAlert className="w-4 h-4 text-purple-600" />
+                  Appeal under Admin Review
+                </div>
+                <p>Your dispute has been escalated directly to our Admin team. We are auditing both sides and will issue a binding decision.</p>
+                <p className="text-[11px] text-purple-700 italic">" {selectedReturn.appeal_reason} "</p>
+              </div>
+            )}
+
+            {/* Request Summary */}
+            <div className="bg-gray-50 rounded-2xl p-4 space-y-2 text-xs">
+              <div className="flex justify-between text-gray-600">
+                <span>Reason:</span>
+                <span className="font-semibold text-gray-900">{selectedReturn.reason}</span>
+              </div>
+              <div className="flex justify-between text-gray-600">
+                <span>Description:</span>
+                <span className="font-semibold text-gray-900 max-w-xs text-right">{selectedReturn.description}</span>
+              </div>
+              {selectedReturn.return_tracking_id && (
+                <div className="flex justify-between text-gray-600">
+                  <span>Return Shipping:</span>
+                  <span className="font-semibold text-gray-900">{selectedReturn.return_courier} — {selectedReturn.return_tracking_id}</span>
+                </div>
+              )}
+            </div>
+
+            {/* Supporting Photos */}
+            {selectedReturn.images && selectedReturn.images.length > 0 && (
+              <div>
+                <p className="text-xs font-bold text-gray-700 mb-2">Proof Photos:</p>
+                <div className="flex flex-wrap gap-2">
+                  {selectedReturn.images.map((img, i) => (
+                    <a key={i} href={img} target="_blank" rel="noreferrer" className="w-16 h-16 rounded-xl border border-gray-200 overflow-hidden block">
+                      <img src={img} alt="proof" className="w-full h-full object-cover hover:scale-105 transition" />
+                    </a>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Enter Shipping info if Approved */}
+            {selectedReturn.status === 'Return Approved' && !selectedReturn.return_tracking_id && (
+              <form onSubmit={handleShipReturn} className="p-4 bg-blue-50/50 border border-blue-100 rounded-2xl space-y-3">
+                <p className="text-xs font-bold text-[#012980] flex items-center gap-1.5">
+                  <Truck className="w-4 h-4" /> Enter Return Shipment Tracking
+                </p>
+                <div className="grid grid-cols-2 gap-2">
+                  <input
+                    type="text"
+                    placeholder="Courier (e.g. BlueDart, DTDC)"
+                    value={courierName}
+                    onChange={(e) => setCourierName(e.target.value)}
+                    className="text-xs p-2.5 rounded-xl border border-gray-300"
+                    required
+                  />
+                  <input
+                    type="text"
+                    placeholder="Tracking / AWB Number"
+                    value={trackingNumber}
+                    onChange={(e) => setTrackingNumber(e.target.value)}
+                    className="text-xs p-2.5 rounded-xl border border-gray-300"
+                    required
+                  />
+                </div>
+                <button
+                  type="submit"
+                  disabled={submittingShip}
+                  className="w-full py-2 bg-[#012980] text-white text-xs font-bold rounded-xl hover:bg-[#001d5a] transition"
+                >
+                  {submittingShip ? 'Submitting...' : 'Mark as Shipped'}
+                </button>
+              </form>
+            )}
+
+            {/* Direct Message Thread */}
+            <div className="border-t pt-4 space-y-3">
+              <p className="text-xs font-bold text-gray-800 flex items-center gap-1.5">
+                <MessageSquare className="w-4 h-4 text-[#012980]" /> Communication Thread
+              </p>
+              
+              <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
+                {selectedReturn.messages && selectedReturn.messages.length > 0 ? (
+                  selectedReturn.messages.map((m) => {
+                    const isMe = m.sender_role === 'customer';
+                    const isAdmin = m.sender_role === 'admin';
+                    return (
+                      <div key={m.id} className={`flex flex-col ${isMe ? 'items-end' : 'items-start'}`}>
+                        <div className={`p-3 rounded-2xl max-w-sm text-xs ${
+                          isMe
+                            ? 'bg-[#012980] text-white rounded-br-xs'
+                            : isAdmin
+                            ? 'bg-purple-100 text-purple-900 rounded-bl-xs border border-purple-200'
+                            : 'bg-gray-100 text-gray-800 rounded-bl-xs'
+                        }`}>
+                          <p className="text-[10px] opacity-75 font-semibold mb-1">
+                            {isMe ? 'You' : isAdmin ? 'Admin Support' : `Vendor (${selectedReturn.store_name || 'Vendor'})`}
+                          </p>
+                          <p className="whitespace-pre-wrap">{m.message}</p>
+                        </div>
+                        <span className="text-[10px] text-gray-400 mt-0.5 px-1">
+                          {new Date(m.created_at).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}
+                        </span>
+                      </div>
+                    );
+                  })
+                ) : (
+                  <p className="text-xs text-gray-400 italic text-center py-4">No messages yet. Send a note directly to the vendor below.</p>
+                )}
+              </div>
+
+              {/* Message Input */}
+              <form onSubmit={handleSendMessage} className="flex gap-2 pt-2">
+                <input
+                  type="text"
+                  placeholder="Type a message to the vendor / admin..."
+                  value={newMessage}
+                  onChange={(e) => setNewMessage(e.target.value)}
+                  className="flex-1 text-xs p-2.5 rounded-xl border border-gray-300 focus:outline-none focus:ring-2 focus:ring-[#012980]"
+                />
+                <button
+                  type="submit"
+                  disabled={sendingMessage || !newMessage.trim()}
+                  className="px-4 py-2.5 bg-[#012980] text-white rounded-xl text-xs font-bold hover:bg-[#001d5a] transition disabled:opacity-50"
+                >
+                  <Send className="w-3.5 h-3.5" />
+                </button>
+              </form>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL 3: APPEAL TO ADMIN */}
+      {activeModal === 'appeal' && selectedReturn && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl border border-gray-100 space-y-4">
+            <div className="flex items-center justify-between border-b pb-3">
+              <h3 className="text-base font-serif font-bold text-rose-700 flex items-center gap-2">
+                <ShieldAlert className="w-5 h-5 text-rose-600" /> Appeal to Admin
+              </h3>
+              <button onClick={() => setActiveModal('details')} className="text-gray-400 hover:text-gray-700">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <p className="text-xs text-gray-600 leading-relaxed">
+              If the vendor rejected your genuine return request, explain your situation below. Our Admin team will review the original order, communication log, and photos to make a final binding decision.
+            </p>
+
+            <form onSubmit={handleAppeal} className="space-y-4">
+              <textarea
+                value={appealReason}
+                onChange={(e) => setAppealReason(e.target.value)}
+                rows={4}
+                placeholder="Explain why the vendor rejection was unjustified..."
+                className="w-full text-xs p-3 rounded-xl border border-gray-300 focus:outline-none focus:ring-2 focus:ring-rose-500"
+                required
+              />
+
+              <div className="flex justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => setActiveModal('details')}
+                  className="px-4 py-2 text-xs font-semibold text-gray-600 hover:bg-gray-100 rounded-xl"
+                >
+                  Back
+                </button>
+                <button
+                  type="submit"
+                  disabled={submittingAppeal}
+                  className="px-5 py-2 text-xs font-bold text-white bg-rose-600 hover:bg-rose-700 rounded-xl transition disabled:opacity-50"
+                >
+                  {submittingAppeal ? 'Submitting...' : 'Submit Appeal to Admin'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

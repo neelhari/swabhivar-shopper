@@ -45,7 +45,7 @@ function Wizard({ type, initial, categories, products, onSave, onClose }) {
   const ScopeStep = () => (
     <>
       <h2 className="font-bold text-gray-900">Apply To</h2>
-      <div className="grid grid-cols-3 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 sm:gap-3">
         {[{ v: 'all', label: 'All My Products' }, { v: 'category', label: 'Categories' }, { v: 'product', label: 'Products' }].map(opt => (
           <button key={opt.v} type="button" onClick={() => set('scope', opt.v)}
             className={`p-3 rounded-xl border-2 text-sm font-semibold transition-all ${form.scope === opt.v ? 'bg-[#012980] border-[#012980] text-white' : 'border-gray-200 text-gray-600 hover:border-[#012980]/40'}`}>
