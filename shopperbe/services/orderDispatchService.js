@@ -225,7 +225,7 @@ async function dispatchVendorPackage({ orderId, vendorId, dispatchedBy = 'vendor
   const vendor = vRes.rows[0];
 
   if (!vendor || !vendor.pickup_contact_name || !vendor.pickup_phone || !vendor.pickup_address_line1 || !vendor.pickup_city || !vendor.pickup_pincode) {
-    throw new Error(`Cannot dispatch: Vendor #${vendorId} (${vendor?.name || 'Unknown'}) does not have a valid pickup address configured.`);
+    throw new Error(`Cannot dispatch: Vendor #${vendorId} (${vendor?.name || 'Unknown'}) does not have a pickup address configured. Please add the pickup address in Store Profile before dispatching.`);
   }
 
   let pickupNickname = vendor.shiprocket_pickup_name || `vnd_${vendor.id}_${vendor.pickup_pincode}`;
@@ -248,30 +248,31 @@ async function dispatchVendorPackage({ orderId, vendorId, dispatchedBy = 'vendor
       }
     }
   } catch (locErr) {
-    console.warn('Shiprocket vendor pickup registration check:', locErr.message);
+    console.error('Shiprocket vendor pickup registration check:', locErr.message);
+    throw new Error(`Cannot dispatch: Vendor #${vendorId} pickup address registration failed on Shiprocket: ${locErr.message}. Please verify and update your pickup address in Store Profile.`);
   }
 
-  // Verify pickup location against existing Shiprocket account locations
+  // Verify pickup location strictly belongs to THIS vendor
   try {
     const availLocs = await shiprocket.getPickupLocations();
     if (availLocs && availLocs.length > 0) {
       const match = availLocs.find(
-        l => String(l.pickup_location).trim().toLowerCase() === String(pickupNickname).trim().toLowerCase()
+        l => String(l.pickup_location).trim().toLowerCase() === String(pickupNickname).trim().toLowerCase() ||
+             String(l.pickup_location).trim().toLowerCase().startsWith(`vnd_${vendor.id}_`)
       );
       if (match) {
         pickupNickname = match.pickup_location;
-      } else {
-        // Look for any location specifically registered for this vendor ID
-        const vendorLoc = availLocs.find(
-          l => String(l.pickup_location).trim().toLowerCase().startsWith(`vnd_${vendor.id}_`)
-        );
-        if (vendorLoc) {
-          pickupNickname = vendorLoc.pickup_location;
-          await client.query('UPDATE vendors SET shiprocket_pickup_name = $1 WHERE id = $2', [vendorLoc.pickup_location, vendor.id]);
+        if (vendor.shiprocket_pickup_name !== match.pickup_location) {
+          await client.query('UPDATE vendors SET shiprocket_pickup_name = $1 WHERE id = $2', [match.pickup_location, vendor.id]);
         }
+      } else {
+        throw new Error(`Cannot dispatch: Vendor pickup location "${pickupNickname}" is not registered on Shiprocket. Please update your pickup address in Store Profile.`);
       }
     }
   } catch (verifyErr) {
+    if (verifyErr.message && verifyErr.message.includes('not registered on Shiprocket')) {
+      throw verifyErr;
+    }
     console.warn('Shiprocket list pickup locations check:', verifyErr.message);
   }
 
@@ -354,14 +355,14 @@ async function dispatchVendorPackage({ orderId, vendorId, dispatchedBy = 'vendor
   } catch (createErr) {
     const validPickups = createErr.shiprocketData?.data?.data || createErr.shiprocketData?.data;
     if (Array.isArray(validPickups) && validPickups.length > 0) {
-      const vendorPick = validPickups.find(p => String(p.pickup_location).startsWith(`vnd_${vendor.id}_`)) || validPickups[0];
+      const vendorPick = validPickups.find(p => String(p.pickup_location).startsWith(`vnd_${vendor.id}_`));
       if (vendorPick?.pickup_location) {
         console.warn(`Vendor dispatch retrying with verified pickup location: ${vendorPick.pickup_location}`);
         srPayload.pickup_location = vendorPick.pickup_location;
         pickupNickname = vendorPick.pickup_location;
         srOrder = await shiprocket.createCustomOrder(srPayload);
       } else {
-        throw createErr;
+        throw new Error(`Cannot dispatch: Vendor #${vendorId} pickup location is not verified in Shiprocket. Please update your pickup address in Store Profile.`);
       }
     } else {
       throw createErr;
