@@ -25,7 +25,7 @@ export function AdminVendorProductsPage() {
         (data.vendors || []).forEach(v => { map[v.id] = v; });
         setVendorsMap(map);
       }
-    } catch {}
+    } catch { }
   };
 
   const fetchProducts = async () => {
@@ -64,7 +64,7 @@ export function AdminVendorProductsPage() {
 
   const handleDelete = async (id) => {
     if (!window.confirm('Are you sure you want to delete this vendor product? This cannot be undone.')) return;
-    
+
     try {
       const token = localStorage.getItem('token');
       const res = await fetch(`${BACKEND_URL}/admin/products/${id}`, {
@@ -138,7 +138,7 @@ export function AdminVendorProductsPage() {
                   </td>
                 </tr>
               ) : (
-                                filteredProducts.map(product => {
+                filteredProducts.map(product => {
                   let parsedSizes = [];
                   try {
                     if (typeof product.sizes === 'string') {
@@ -146,21 +146,21 @@ export function AdminVendorProductsPage() {
                     } else if (Array.isArray(product.sizes)) {
                       parsedSizes = product.sizes;
                     }
-                  } catch (e) {}
-  
+                  } catch (e) { }
+
                   let price = product.price || 0;
                   let stock = product.stock || 0;
-  
+
                   if (parsedSizes && parsedSizes.length > 0) {
                     if (parsedSizes[0].sizes && Array.isArray(parsedSizes[0].sizes) && parsedSizes[0].sizes.length > 0) {
                       price = parsedSizes[0].sizes[0].price;
-                      stock = parsedSizes.reduce((acc, color) => acc + (color.sizes?.reduce((sum, s) => sum + (Number(s.stock)||0), 0)||0), 0);
+                      stock = parsedSizes.reduce((acc, color) => acc + (color.sizes?.reduce((sum, s) => sum + (Number(s.stock) || 0), 0) || 0), 0);
                     } else if (parsedSizes[0].price !== undefined) {
                       price = parsedSizes[0].price;
-                      stock = parsedSizes.reduce((acc, s) => acc + (Number(s.stock)||0), 0);
+                      stock = parsedSizes.reduce((acc, s) => acc + (Number(s.stock) || 0), 0);
                     }
                   }
-  
+
                   return (
                     <tr key={product.id} className="hover:bg-gray-50 transition-colors">
                       <td className="px-6 py-4">

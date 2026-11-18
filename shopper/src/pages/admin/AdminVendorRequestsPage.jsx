@@ -38,7 +38,7 @@ export function AdminVendorRequestsPage() {
       const token = localStorage.getItem('token');
       const res = await fetch(`${BACKEND_URL}/admin/vendors/${id}/status`, {
         method: 'PUT',
-        headers: { 
+        headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
         },

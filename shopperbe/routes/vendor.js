@@ -318,6 +318,10 @@ router.put('/pickup-address', async (req, res) => {
 
     // Register or synchronize with Shiprocket
     let srResult = null;
+    let registeredNickname = srNickname;
+    let finalAddress1 = address_line1.trim();
+    let finalCity = city.trim();
+
     try {
       srResult = await shiprocket.addPickupLocation({
         pickup_location: srNickname,
@@ -330,8 +334,21 @@ router.put('/pickup-address', async (req, res) => {
         state: state.trim(),
         pin_code: cleanPincode
       });
+      if (srResult?.pickup_location) {
+        registeredNickname = srResult.pickup_location;
+      }
+      if (srResult?.address) {
+        finalAddress1 = srResult.address;
+      }
+      if (srResult?.city) {
+        finalCity = srResult.city;
+      }
     } catch (srErr) {
-      console.warn('Shiprocket addpickup warning:', srErr.message);
+      console.error('Shiprocket addPickupLocation failed:', srErr.message);
+      await client.query('ROLLBACK');
+      return res.status(400).json({ 
+        error: `Shiprocket address validation failed: ${srErr.message}. Note: Address line 1 must include a Shop, Flat, Plot, or House number.` 
+      });
     }
 
     const updateRes = await client.query(
@@ -349,9 +366,9 @@ router.put('/pickup-address', async (req, res) => {
        RETURNING pickup_contact_name, pickup_phone, pickup_address_line1, pickup_address_line2,
                  pickup_landmark, pickup_city, pickup_state, pickup_pincode, shiprocket_pickup_name`,
       [
-        contact_name.trim(), cleanPhone, address_line1.trim(),
+        contact_name.trim(), cleanPhone, finalAddress1,
         (address_line2 || '').trim(), (landmark || '').trim(),
-        city.trim(), state.trim(), cleanPincode, srNickname,
+        finalCity, state.trim(), cleanPincode, registeredNickname,
         req.vendorId
       ]
     );

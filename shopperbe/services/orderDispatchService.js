@@ -258,11 +258,16 @@ async function dispatchVendorPackage({ orderId, vendorId, dispatchedBy = 'vendor
       const match = availLocs.find(
         l => String(l.pickup_location).trim().toLowerCase() === String(pickupNickname).trim().toLowerCase()
       );
-      if (!match) {
-        const primaryLoc = availLocs.find(l => l.is_primary_location === 1 || l.is_primary_location === '1') || availLocs[0];
-        if (primaryLoc?.pickup_location) {
-          console.warn(`Vendor pickup nickname "${pickupNickname}" not verified in Shiprocket; falling back to primary location "${primaryLoc.pickup_location}".`);
-          pickupNickname = primaryLoc.pickup_location;
+      if (match) {
+        pickupNickname = match.pickup_location;
+      } else {
+        // Look for any location specifically registered for this vendor ID
+        const vendorLoc = availLocs.find(
+          l => String(l.pickup_location).trim().toLowerCase().startsWith(`vnd_${vendor.id}_`)
+        );
+        if (vendorLoc) {
+          pickupNickname = vendorLoc.pickup_location;
+          await client.query('UPDATE vendors SET shiprocket_pickup_name = $1 WHERE id = $2', [vendorLoc.pickup_location, vendor.id]);
         }
       }
     }
@@ -348,11 +353,16 @@ async function dispatchVendorPackage({ orderId, vendorId, dispatchedBy = 'vendor
     srOrder = await shiprocket.createCustomOrder(srPayload);
   } catch (createErr) {
     const validPickups = createErr.shiprocketData?.data?.data || createErr.shiprocketData?.data;
-    if (Array.isArray(validPickups) && validPickups.length > 0 && validPickups[0]?.pickup_location) {
-      console.warn(`Vendor dispatch retrying with verified pickup location: ${validPickups[0].pickup_location}`);
-      srPayload.pickup_location = validPickups[0].pickup_location;
-      pickupNickname = validPickups[0].pickup_location;
-      srOrder = await shiprocket.createCustomOrder(srPayload);
+    if (Array.isArray(validPickups) && validPickups.length > 0) {
+      const vendorPick = validPickups.find(p => String(p.pickup_location).startsWith(`vnd_${vendor.id}_`)) || validPickups[0];
+      if (vendorPick?.pickup_location) {
+        console.warn(`Vendor dispatch retrying with verified pickup location: ${vendorPick.pickup_location}`);
+        srPayload.pickup_location = vendorPick.pickup_location;
+        pickupNickname = vendorPick.pickup_location;
+        srOrder = await shiprocket.createCustomOrder(srPayload);
+      } else {
+        throw createErr;
+      }
     } else {
       throw createErr;
     }

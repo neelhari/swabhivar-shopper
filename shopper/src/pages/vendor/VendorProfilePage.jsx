@@ -658,9 +658,10 @@ export function VendorProfilePage() {
                   value={pickupForm.address_line1}
                   onChange={e => setPickupForm(p => ({ ...p, address_line1: e.target.value }))}
                   required
-                  placeholder="House / Building / Shop No, Street Name"
+                  placeholder="Shop / Plot / House No, Street Name"
                   className="block w-full px-3 py-2 bg-gray-50/50 border border-gray-200 rounded-xl text-sm focus:bg-white focus:ring-2 focus:ring-[#012980]/30"
                 />
+                <p className="text-[11px] text-gray-500 mt-1">Must include a Shop, Building, Plot, or House number (e.g. Shop #101, Main Road)</p>
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">

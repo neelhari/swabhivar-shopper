@@ -384,15 +384,14 @@ export function VendorWalletPage() {
                     {/* Top Row: Type Badge + Order Reference + Date */}
                     <div className="flex items-center justify-between gap-2">
                       <div className="flex items-center gap-1.5 flex-wrap">
-                        <span className={`inline-flex items-center gap-0.5 px-2 py-0.5 rounded-full text-[10px] font-bold ${
-                          isCredit 
-                            ? 'bg-green-50 text-green-700 border border-green-200' 
-                            : isReversal 
-                            ? 'bg-amber-50 text-amber-700 border border-amber-200' 
+                        <span className={`inline-flex items-center gap-0.5 px-2 py-0.5 rounded-full text-[10px] font-bold ${isCredit
+                          ? 'bg-green-50 text-green-700 border border-green-200'
+                          : isReversal
+                            ? 'bg-amber-50 text-amber-700 border border-amber-200'
                             : tx.type === 'voided'
-                            ? 'bg-slate-100 text-slate-500 border border-slate-300'
-                            : 'bg-red-50 text-red-700 border border-red-200'
-                        }`}>
+                              ? 'bg-slate-100 text-slate-500 border border-slate-300'
+                              : 'bg-red-50 text-red-700 border border-red-200'
+                          }`}>
                           {isCredit ? <ArrowDownLeft className="w-3 h-3" /> : <ArrowUpRight className="w-3 h-3" />}
                           {isCredit ? 'Order Earning' : isReversal ? 'Order Reversal' : tx.type === 'voided' ? 'Voided' : 'Payout'}
                         </span>
@@ -485,15 +484,14 @@ export function VendorWalletPage() {
                         {/* Type & Order Reference */}
                         <td className="px-5 py-3.5">
                           <div className="flex items-center gap-1.5">
-                            <span className={`inline-flex items-center gap-0.5 px-2 py-0.5 rounded-full text-[10px] font-bold ${
-                              isCredit 
-                                ? 'bg-green-50 text-green-700 border border-green-200' 
-                                : isReversal 
-                                ? 'bg-amber-50 text-amber-700 border border-amber-200' 
+                            <span className={`inline-flex items-center gap-0.5 px-2 py-0.5 rounded-full text-[10px] font-bold ${isCredit
+                              ? 'bg-green-50 text-green-700 border border-green-200'
+                              : isReversal
+                                ? 'bg-amber-50 text-amber-700 border border-amber-200'
                                 : tx.type === 'voided'
-                                ? 'bg-slate-100 text-slate-500 border border-slate-300'
-                                : 'bg-red-50 text-red-700 border border-red-200'
-                            }`}>
+                                  ? 'bg-slate-100 text-slate-500 border border-slate-300'
+                                  : 'bg-red-50 text-red-700 border border-red-200'
+                              }`}>
                               {isCredit ? <ArrowDownLeft className="w-3 h-3" /> : <ArrowUpRight className="w-3 h-3" />}
                               {isCredit ? 'Order Earning' : isReversal ? 'Order Reversal' : tx.type === 'voided' ? 'Voided' : 'Payout'}
                             </span>

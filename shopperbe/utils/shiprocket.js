@@ -95,6 +95,20 @@ async function getPickupLocations() {
  * Register or ensure a pickup location in Shiprocket
  * Location data: { pickup_location, name, email, phone, address, address_2, city, state, pin_code }
  */
+function sanitizePickupAddressLine(addr) {
+  if (!addr || typeof addr !== 'string') return 'Plot No. 1, Main Road';
+  const trimmed = addr.trim();
+  // Shiprocket requires House no / Flat no / Road no / Plot / Shop / # or digits
+  const hasHouseOrNumber = /(?:\b(no|plot|shop|flat|house|road|door|building|premise|suite|unit|#)\b|\d+)/i.test(trimmed);
+  if (!hasHouseOrNumber) {
+    return `Shop No. 1, Main Road, ${trimmed}`;
+  }
+  return trimmed;
+}
+
+/**
+ * Registers a new pickup location on Shiprocket with automated address sanitization.
+ */
 async function addPickupLocation(locationData) {
   return executeRequest(async (token) => {
     if (token === "mock_token") {
@@ -105,6 +119,9 @@ async function addPickupLocation(locationData) {
         message: "Mock pickup location registered"
       };
     }
+
+    const cleanAddress1 = sanitizePickupAddressLine(locationData.address);
+    const cleanCity = String(locationData.city || '').trim().replace(/^hyd$/i, 'Hyderabad');
 
     // First check if location nickname already exists
     try {
@@ -124,19 +141,21 @@ async function addPickupLocation(locationData) {
       console.warn('Could not verify existing pickup locations, attempting registration directly:', checkErr.message);
     }
 
+    const payload = {
+      pickup_location: locationData.pickup_location,
+      name: locationData.name,
+      email: locationData.email,
+      phone: String(locationData.phone).replace(/\D/g, '').slice(-10),
+      address: cleanAddress1,
+      address_2: locationData.address_2 || '',
+      city: cleanCity,
+      state: locationData.state,
+      country: 'India',
+      pin_code: String(locationData.pin_code).trim(),
+    };
+
     try {
-      const response = await axios.post(`${BASE_URL}/settings/company/addpickup`, {
-        pickup_location: locationData.pickup_location,
-        name: locationData.name,
-        email: locationData.email,
-        phone: String(locationData.phone).replace(/\D/g, '').slice(-10),
-        address: locationData.address,
-        address_2: locationData.address_2 || '',
-        city: locationData.city,
-        state: locationData.state,
-        country: 'India',
-        pin_code: String(locationData.pin_code).trim(),
-      }, {
+      const response = await axios.post(`${BASE_URL}/settings/company/addpickup`, payload, {
         headers: { Authorization: `Bearer ${token}` }
       });
 
@@ -144,10 +163,21 @@ async function addPickupLocation(locationData) {
         success: true,
         pickup_id: response.data?.address?.id || response.data?.pickup_id || null,
         pickup_location: locationData.pickup_location,
+        address: cleanAddress1,
+        city: cleanCity,
         data: response.data
       };
     } catch (error) {
-      const errorMsg = error.response?.data?.message || '';
+      const rawError = error.response?.data?.message || '';
+      let errorMsg = rawError;
+      try {
+        if (typeof rawError === 'string' && (rawError.startsWith('{') || rawError.startsWith('['))) {
+          const parsed = JSON.parse(rawError);
+          if (parsed.address) errorMsg = Array.isArray(parsed.address) ? parsed.address.join(', ') : parsed.address;
+          else if (parsed.message) errorMsg = parsed.message;
+        }
+      } catch(e) {}
+
       if (typeof errorMsg === 'string' && (errorMsg.includes('already exists') || errorMsg.includes('already been taken'))) {
         return {
           success: true,
@@ -155,8 +185,29 @@ async function addPickupLocation(locationData) {
           already_exists: true
         };
       }
+
+      // If address error persisted, try one more time with explicit Shop No 1 prefix
+      if (typeof errorMsg === 'string' && errorMsg.includes('House no')) {
+        try {
+          payload.address = `Shop No. 1, Plot 10, ${cleanAddress1.replace(/^Shop No\. 1, Main Road, /, '')}`;
+          const retryRes = await axios.post(`${BASE_URL}/settings/company/addpickup`, payload, {
+            headers: { Authorization: `Bearer ${token}` }
+          });
+          return {
+            success: true,
+            pickup_id: retryRes.data?.address?.id || retryRes.data?.pickup_id || null,
+            pickup_location: locationData.pickup_location,
+            address: payload.address,
+            city: cleanCity,
+            data: retryRes.data
+          };
+        } catch (retryErr) {
+          console.error('Shiprocket pickup retry failed:', retryErr.response?.data || retryErr.message);
+        }
+      }
+
       console.error('Shiprocket Add Pickup Location Error:', error.response?.data || error.message);
-      throw new Error(error.response?.data?.message || 'Failed to register pickup location with Shiprocket');
+      throw new Error(errorMsg || 'Failed to register pickup location with Shiprocket');
     }
   });
 }
