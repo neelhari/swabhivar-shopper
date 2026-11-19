@@ -1,4 +1,3 @@
-@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&family=Playfair+Display:wght@600;700;800&display=swap');
 @import "tailwindcss";
 
 @theme {
@@ -44,6 +43,11 @@
   .glow-text {
     text-shadow: 0 0 10px var(--color-brand-orange-glow);
   }
+}
+
+html, body {
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
 }
 
 body {

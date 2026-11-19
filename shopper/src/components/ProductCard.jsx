@@ -90,15 +90,14 @@ function getFirstImage(product, parsedSizes) {
 }
 
 
-export function ProductCard({ product, layout = 'grid' }) {
+export const ProductCard = React.memo(function ProductCard({ product, layout = 'grid' }) {
   const navigate = useNavigate();
-  const { toggleWishlist, items: wishlistItems } = useWishlistStore();
-  const { addToCart, items: cartItems } = useCartStore();
+  const toggleWishlist = useWishlistStore(s => s.toggleWishlist);
+  const isWishlisted = useWishlistStore(s => s.items.includes(product.id));
+  const addToCart = useCartStore(s => s.addToCart);
+  const isAdded = useCartStore(s => s.items.some(i => (i.product?.id || i.product_id) === product.id));
   const { token } = useAuthStore();
   const [imgErr, setImgErr] = useState(false);
-
-  const isWishlisted = wishlistItems.includes(product.id);
-  const isAdded = cartItems?.some(item => item.product.id === product.id);
 
   let parsedSizes = [];
   try {
@@ -270,4 +269,4 @@ export function ProductCard({ product, layout = 'grid' }) {
       </div>
     </div>
   );
-}
+});

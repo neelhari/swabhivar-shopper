@@ -20,6 +20,7 @@ export const BACKEND_URL = resolveBackendUrl(import.meta.env.VITE_BACKEND_URL);
 
 const api = axios.create({
   baseURL: resolveBackendUrl(import.meta.env.VITE_API_URL),
+  timeout: 30000,
 });
 
 api.interceptors.request.use((config) => {

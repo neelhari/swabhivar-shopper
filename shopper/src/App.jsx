@@ -91,10 +91,11 @@ import { VendorReturnsPage } from './pages/vendor/VendorReturnsPage';
 function PageTransition({ children }) {
   return (
     <motion.div
-      initial={{ opacity: 0, y: 15 }}
+      initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
-      exit={{ opacity: 0, y: -15 }}
-      transition={{ duration: 0.3, ease: 'easeOut' }}
+      exit={{ opacity: 0 }}
+      transition={{ duration: 0.15, ease: 'easeOut' }}
+      className="w-full"
     >
       {children}
     </motion.div>
@@ -104,7 +105,7 @@ function PageTransition({ children }) {
 function AnimatedAppRoutes() {
   const location = useLocation();
   return (
-    <AnimatePresence mode="wait">
+    <AnimatePresence mode="popLayout">
       <Routes location={location} key={location.pathname}>
         <Route path="/" element={<PageTransition><HomePage /></PageTransition>} />
         <Route path="/about" element={<PageTransition><AboutPage /></PageTransition>} />
@@ -167,7 +168,7 @@ function App() {
       try { sessionStorage.setItem('splash_shown', 'true'); } catch {}
       const timer = setTimeout(() => {
         setShowSplash(false);
-      }, 2000);
+      }, 1200);
       return () => clearTimeout(timer);
     }
   }, [showSplash]);
