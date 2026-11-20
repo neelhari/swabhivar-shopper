@@ -215,6 +215,9 @@ export function VendorProfilePage() {
         prefill: { name: vendor?.name, email: vendor?.email, contact: vendor?.phone },
         theme: { color: '#012980' },
       };
+      if (!window.Razorpay) {
+        throw new Error('Payment gateway is still loading. Please check your internet connection or try again in a moment.');
+      }
       new window.Razorpay(options).open();
     } catch (err) {
       toast.error(err.message);

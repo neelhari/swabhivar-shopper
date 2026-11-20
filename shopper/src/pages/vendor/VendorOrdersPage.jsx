@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { 
-  Search, ShoppingBag, MessageCircle, ChevronDown, Printer, FileText, 
+  Search, ShoppingBag, ChevronDown, Printer, FileText, 
   PackageSearch, Truck, CheckCircle2, ExternalLink, AlertTriangle, RefreshCw 
 } from 'lucide-react';
 import { toast } from 'react-toastify';
@@ -108,14 +108,6 @@ export function VendorOrdersPage() {
     fetchOrders();
   }, []);
 
-  const notifyWhatsApp = (order) => {
-    let address = {};
-    try { address = typeof order.address === 'string' ? JSON.parse(order.address) : (order.address || {}); } catch(e) {}
-    const phone = (order.user_phone || address.mobile || "0000000000").replace(/\D/g, "");
-    const msg = encodeURIComponent(`Hi ${order.user_name || address.name || "Customer"}! Your order #${order.order_number || order.id} containing our products has been updated to: *${order.status}*.`);
-    window.open(`https://wa.me/${phone}?text=${msg}`, "_blank");
-  };
-
   const escapeHtml = (value) =>
     String(value ?? "")
       .replace(/&/g, "&amp;")
@@ -212,12 +204,12 @@ export function VendorOrdersPage() {
                           </div>
                       </td>
                       <td class="ship-box">
-                          <div class="section-heading">Shipping To (Customer)</div>
+                          <div class="section-heading">Shipment & Delivery</div>
                           <div class="address-box">
-                              <strong>${escapeHtml(address.name || order.user_name || "Valued Customer")}</strong><br>
-                              ${escapeHtml(address.line1 || address.addressLine1 || "")}${address.line2 || address.addressLine2 ? `, ${escapeHtml(address.line2 || address.addressLine2)}` : ""}<br>
-                              ${escapeHtml(address.city || "")}, ${escapeHtml(address.state || "")} — ${escapeHtml(address.pincode || "")}<br>
-                              <strong>Mobile:</strong> ${escapeHtml(address.mobile || order.user_phone || "N/A")}
+                              <strong>Destination:</strong> ${escapeHtml([address.city, address.state, address.pincode].filter(Boolean).join(", ") || "Domestic Delivery")}<br>
+                              <strong>Fulfillment:</strong> Shiprocket Dispatch<br>
+                              <strong>Order Ref:</strong> #${escapeHtml(order.order_number || order.id)}<br>
+                              <span style="font-size:10px;color:#888;">Customer privacy protected by platform</span>
                           </div>
                       </td>
                   </tr>
@@ -379,38 +371,30 @@ export function VendorOrdersPage() {
                       </span>
                     </div>
 
-                    {/* Customer & Destination Preview */}
+                    {/* Order Items & Fulfillment Preview */}
                     <div className="bg-gray-50/70 p-3 rounded-xl border border-gray-100 mb-3 text-xs space-y-1">
                       <div className="flex items-center justify-between">
-                        <span className="font-bold text-gray-900 truncate">
-                          {address.name || order.user_name || 'Customer'}
+                        <span className="font-semibold text-gray-800">
+                          {items.length} item{items.length !== 1 ? 's' : ''} in this order
                         </span>
                         <div className="flex items-center gap-1.5 shrink-0">
                           <button
-                            onClick={() => notifyWhatsApp(order)}
-                            className="p-1 text-green-600 hover:bg-green-100 rounded-md transition-colors"
-                            title="Chat on WhatsApp"
-                          >
-                            <MessageCircle className="w-3.5 h-3.5" />
-                          </button>
-                          <button
                             onClick={() => printInvoice(order)}
                             className="p-1 text-gray-600 hover:bg-gray-200 rounded-md transition-colors"
-                            title="Print Invoice"
+                            title="Print Packing Slip"
                           >
                             <Printer className="w-3.5 h-3.5" />
                           </button>
                         </div>
                       </div>
-                      <p className="text-gray-500 text-[11px] line-clamp-1">
-                        {[address.city, address.state, address.pincode].filter(Boolean).join(', ') || 'No address details'}
+                      {firstItem && (
+                        <p className="text-gray-500 text-[11px] truncate">
+                          {firstItem.product?.name || firstItem.name}
+                        </p>
+                      )}
+                      <p className="text-gray-400 text-[10px]">
+                        Destination: {[address.city, address.state].filter(Boolean).join(', ') || 'Domestic'}
                       </p>
-                      <div className="pt-1 flex items-center gap-2 text-[11px] text-gray-500">
-                        <span className="font-semibold text-gray-700">{items.length} item{items.length !== 1 ? 's' : ''}</span>
-                        {firstItem && (
-                          <span className="text-gray-400 truncate">• {firstItem.product?.name || firstItem.name}</span>
-                        )}
-                      </div>
                     </div>
 
                     {/* Primary Mobile Action Buttons */}
@@ -486,15 +470,6 @@ export function VendorOrdersPage() {
                           </div>
                         )}
 
-                        {/* Customer Full Address */}
-                        <div className="bg-white p-3.5 rounded-xl border border-gray-200/80 space-y-1.5">
-                          <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Full Delivery Address</p>
-                          <p className="font-bold text-gray-900 text-xs">{address.name || order.user_name || 'Customer'}</p>
-                          <p className="text-gray-600 text-[11px] leading-relaxed">
-                            {[address.line1 || address.addressLine1, address.line2 || address.addressLine2, address.landmark, address.city, address.state, address.pincode].filter(Boolean).join(', ')}
-                          </p>
-                          <p className="text-gray-500 text-[11px] pt-0.5">Phone: <strong className="text-gray-900">{address.mobile || order.user_phone || 'N/A'}</strong></p>
-                        </div>
 
                         {/* Items in Order */}
                         <div className="bg-white p-3.5 rounded-xl border border-gray-200/80 space-y-2.5">
@@ -741,38 +716,7 @@ export function VendorOrdersPage() {
                                       </div>
                                     )}
 
-                                    {/* Customer Info */}
-                                    <div className="bg-white p-5 rounded-2xl border border-gray-200 shadow-2xs">
-                                      <h4 className="font-bold text-gray-900 mb-3 text-sm flex items-center gap-2 border-b border-gray-100 pb-2">
-                                        Customer Delivery Address
-                                      </h4>
-                                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
-                                        <div>
-                                          <p className="text-gray-400 text-[10px] uppercase tracking-wider mb-0.5">Customer Name</p>
-                                          <p className="font-bold text-gray-900">{address.name || order.user_name || "Valued Customer"}</p>
-                                        </div>
-                                        <div>
-                                          <p className="text-gray-400 text-[10px] uppercase tracking-wider mb-0.5">Phone Number</p>
-                                          <div className="flex items-center gap-2">
-                                            <p className="font-bold text-gray-900">{address.mobile || order.user_phone || "N/A"}</p>
-                                            <button 
-                                              onClick={(e) => { e.stopPropagation(); notifyWhatsApp(order); }} 
-                                              className="text-green-600 hover:bg-green-50 p-1 rounded-md transition-colors" 
-                                              title="Message on WhatsApp"
-                                            >
-                                              <MessageCircle className="w-4 h-4" />
-                                            </button>
-                                          </div>
-                                        </div>
-                                        <div className="sm:col-span-2">
-                                          <p className="text-gray-400 text-[10px] uppercase tracking-wider mb-0.5">Delivery Destination</p>
-                                          <p className="text-gray-800 font-medium">
-                                            {address.line1 || address.addressLine1 || ""} {address.line2 || address.addressLine2 || ""}, {address.city || ""}, {address.state || ""} — {address.pincode || ""}
-                                          </p>
-                                        </div>
-                                      </div>
-                                    </div>
-                                    
+
                                     {/* Items */}
                                     <div className="bg-white p-5 rounded-2xl border border-gray-200 shadow-2xs">
                                       <h4 className="font-bold text-gray-900 mb-3 text-sm border-b border-gray-100 pb-2">

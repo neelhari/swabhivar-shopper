@@ -426,6 +426,13 @@ router.get('/orders', async (req, res) => {
         order.has_pickup_address = hasPickupAddress;
         order.can_dispatch = !shipment && !['cancelled', 'delivered'].includes(String(order.status).toLowerCase());
 
+        // Privacy protection: do not disclose customer personal info to vendors
+        delete order.user_name;
+        delete order.user_phone;
+        delete order.user_email;
+        delete order.shipping_address;
+        delete order.address;
+
         vendorOrders.push(order);
       }
     });

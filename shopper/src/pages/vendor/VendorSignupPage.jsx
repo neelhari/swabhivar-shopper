@@ -142,6 +142,9 @@ export function VendorSignupPage() {
         prefill: { name: `${formData.firstName} ${formData.lastName}`, email: formData.email, contact: formData.phone },
         theme: { color: '#012980' },
       };
+      if (!window.Razorpay) {
+        throw new Error('Payment gateway is still loading. Please check your internet connection or try again in a moment.');
+      }
       const rzp = new window.Razorpay(options);
       rzp.on('payment.failed', () => { setError('Payment failed. Please try again.'); });
       rzp.open();
