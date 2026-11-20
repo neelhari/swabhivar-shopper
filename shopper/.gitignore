@@ -2,6 +2,9 @@
 node_modules
 dist
 dist-ssr
+dist-*
+apk-output
+icon-assets
 
 # Environment files
 .env

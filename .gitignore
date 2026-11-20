@@ -14,10 +14,23 @@ node_modules/
 # Production builds
 dist/
 dist-ssr/
+dist-*/
 build/
 */dist/
 */dist-ssr/
+*/dist-*/
 */build/
+
+# Mobile outputs and icon assets
+apk-output/
+*/apk-output/
+icon-assets/
+*/icon-assets/
+
+# Root scratch and audit test scripts
+check_*.js
+get_msg91_report.js
+production_audit.js
 
 # Logs
 logs/

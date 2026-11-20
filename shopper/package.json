@@ -5,7 +5,15 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "dev:customer": "vite --mode customer",
+    "dev:vendor": "vite --mode vendor",
+    "dev:admin": "vite --mode admin",
     "build": "vite build",
+    "build:customer": "vite build --mode customer --outDir dist-customer --emptyOutDir",
+    "build:vendor": "vite build --mode vendor --outDir dist-vendor --emptyOutDir",
+    "build:admin": "vite build --mode admin --outDir dist-admin --emptyOutDir",
+    "sync:customer": "node -e \"require('fs').copyFileSync('capacitor.config.customer.json', 'capacitor.config.json')\" && cap sync android",
+    "sync:vendor": "node -e \"require('fs').copyFileSync('capacitor.config.vendor.json', 'capacitor.config.json')\" && cap sync android",
     "lint": "oxlint",
     "preview": "vite preview"
   },
