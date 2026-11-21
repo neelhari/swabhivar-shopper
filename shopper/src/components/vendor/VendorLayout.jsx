@@ -24,6 +24,7 @@ import {
   HelpCircle
 } from "lucide-react";
 import logo from '../../assets/logo.png';
+import { registerPushNotifications, unregisterPushNotifications } from '../../services/pushNotificationService';
 
 const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || "http://localhost:5000/api";
 
@@ -61,6 +62,7 @@ export function VendorLayout({ children }) {
       .then((d) => {
         if (!d.vendor) { navigate("/vendor-login"); return; }
         setVendor(d.vendor);
+        registerPushNotifications('vendor');
       })
       .catch(() => navigate("/vendor-login"));
   }, [navigate]);
@@ -71,6 +73,7 @@ export function VendorLayout({ children }) {
   }, [pathname]);
 
   const handleLogout = () => {
+    unregisterPushNotifications('vendor');
     localStorage.removeItem("vendor_token");
     navigate("/vendor-login");
   };

@@ -27,6 +27,15 @@ apk-output/
 icon-assets/
 */icon-assets/
 
+# Firebase credentials and secret assets
+*firebase*assets*/
+firebase-assets/
+firebase assets/
+*/firebase-assets/
+*/firebase assets/
+*google-services*.json
+*service-account*.json
+
 # Root scratch and audit test scripts
 check_*.js
 get_msg91_report.js

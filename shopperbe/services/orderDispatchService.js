@@ -37,6 +37,20 @@ async function updateOverallOrderStatus(orderId, client) {
 
   if (newStatus !== order.status) {
     await client.query("UPDATE orders SET status = $1 WHERE id = $2", [newStatus, orderId]);
+
+    // Send push notification to customer on dispatch status update
+    try {
+      if (newStatus === 'shipped' || newStatus === 'partially_shipped') {
+        const pushNotificationService = require('./pushNotificationService');
+        pushNotificationService.notifyOrderDispatched({
+          orderNumber: order.order_number,
+          customerId: order.user_id,
+          trackingId: order.platform_awb || order.tracking_id || null
+        });
+      }
+    } catch (pushErr) {
+      console.warn('Dispatch overall status push notification non-blocking error:', pushErr.message);
+    }
   }
 }
 

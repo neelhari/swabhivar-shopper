@@ -344,6 +344,23 @@ router.post('/orders', async (req, res) => {
     } catch (emailErr) {
       console.warn('Non-blocking order email delivery error:', emailErr.message);
     }
+
+    // Trigger push notifications asynchronously
+    try {
+      let customerUserId = null;
+      if (address?.email) {
+        const uRes = await pool.query('SELECT id FROM users WHERE email = $1', [address.email]);
+        if (uRes.rows[0]) customerUserId = uRes.rows[0].id;
+      }
+      const pushNotificationService = require('../services/pushNotificationService');
+      pushNotificationService.notifyOrderPlaced({
+        orderNumber,
+        customerId: customerUserId,
+        vendorAccounting
+      });
+    } catch (pushErr) {
+      console.warn('Non-blocking order push notification error:', pushErr.message);
+    }
     
     res.json({ success: true, order: result.rows[0] });
   } catch (err) {

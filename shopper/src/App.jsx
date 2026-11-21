@@ -7,6 +7,7 @@ import 'react-toastify/dist/ReactToastify.css';
 import { useAuthStore } from './store/useAuthStore';
 import { useCartStore } from './store/useCartStore';
 import { GlobalBackButtonListener } from './components/GlobalBackButtonListener';
+import { registerPushNotifications } from './services/pushNotificationService';
 
 import { CustomerRoutes } from './routes/CustomerRoutes';
 import { VendorRoutes } from './routes/VendorRoutes';
@@ -69,6 +70,7 @@ function App() {
     if (target === 'customer') {
       if (token) {
         fetchCart();
+        registerPushNotifications('customer');
       } else {
         clearLocalCart();
       }

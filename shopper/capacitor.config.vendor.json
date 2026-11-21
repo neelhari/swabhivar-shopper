@@ -8,5 +8,10 @@
   "android": {
     "path": "android-vendor",
     "allowMixedContent": true
+  },
+  "plugins": {
+    "PushNotifications": {
+      "presentationOptions": ["badge", "sound", "alert"]
+    }
   }
 }

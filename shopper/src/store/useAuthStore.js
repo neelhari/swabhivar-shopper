@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import api, { BACKEND_URL } from '../utils/api';
+import { registerPushNotifications, unregisterPushNotifications } from '../services/pushNotificationService';
 
 const BACKEND = BACKEND_URL.replace('/api', '') || 'http://13.201.223.39';
 
@@ -45,6 +46,7 @@ export const useAuthStore = create((set, get) => ({
       const { data } = await api.post('/auth/verify-otp', { email, phone, otp });
       localStorage.setItem('token', data.token);
       set({ token: data.token, user: data.user, loading: false });
+      registerPushNotifications('customer');
       return { success: true };
     } catch (err) {
       const error = err.response?.data?.error || 'OTP verification failed';
@@ -59,6 +61,7 @@ export const useAuthStore = create((set, get) => ({
       const { data } = await api.post('/auth/login', { email, password });
       localStorage.setItem('token', data.token);
       set({ token: data.token, user: data.user, loading: false });
+      registerPushNotifications('customer');
       return { success: true, role: data.user.role };
     } catch (err) {
       const error = err.response?.data?.error || 'Login failed';
@@ -112,6 +115,7 @@ export const useAuthStore = create((set, get) => ({
     try {
       const { data } = await api.get('/auth/profile');
       set({ user: data.user, addresses: data.addresses, orders: data.orders, loading: false });
+      registerPushNotifications('customer');
     } catch {
       set({ loading: false });
     }
@@ -148,6 +152,7 @@ export const useAuthStore = create((set, get) => ({
   },
 
   logout: () => {
+    unregisterPushNotifications('customer');
     localStorage.removeItem('token');
     set({ user: null, token: null, addresses: [], orders: [] });
   },
@@ -172,5 +177,6 @@ export const useAuthStore = create((set, get) => ({
   handleGoogleCallback: (token, user) => {
     localStorage.setItem('token', token);
     set({ token, user });
+    registerPushNotifications('customer');
   },
 }));

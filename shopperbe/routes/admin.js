@@ -177,6 +177,29 @@ router.put('/orders/:id/status', async (req, res) => {
     );
 
     await client.query('COMMIT');
+
+    // Trigger push notification to customer on status update
+    try {
+      const updatedOrder = result.rows[0];
+      if (updatedOrder) {
+        const pushNotificationService = require('../services/pushNotificationService');
+        if (status === 'shipped') {
+          pushNotificationService.notifyOrderDispatched({
+            orderNumber: updatedOrder.order_number,
+            customerId: updatedOrder.user_id,
+            trackingId: updatedOrder.tracking_id
+          });
+        } else if (status === 'delivered') {
+          pushNotificationService.notifyOrderDelivered({
+            orderNumber: updatedOrder.order_number,
+            customerId: updatedOrder.user_id
+          });
+        }
+      }
+    } catch (pushErr) {
+      console.warn('Admin status push notification non-blocking error:', pushErr.message);
+    }
+
     res.json({ order: result.rows[0] });
   } catch (err) {
     await client.query('ROLLBACK');
@@ -408,12 +431,26 @@ router.post('/orders/:id/ship', async (req, res) => {
     const primaryTracking = createdShipments[0]?.tracking_url || `https://shiprocket.co/tracking/${primaryAwb}`;
 
     // 3. Save to database
-    await client.query(
-      'UPDATE orders SET tracking_id=$1, tracking_link=$2, status=$3 WHERE id=$4',
+    const shipResult = await client.query(
+      'UPDATE orders SET tracking_id=$1, tracking_link=$2, status=$3 WHERE id=$4 RETURNING *',
       [primaryAwb, primaryTracking, 'shipped', req.params.id]
     );
 
     await client.query('COMMIT');
+
+    try {
+      const shippedOrder = shipResult.rows[0];
+      if (shippedOrder) {
+        const pushNotificationService = require('../services/pushNotificationService');
+        pushNotificationService.notifyOrderDispatched({
+          orderNumber: shippedOrder.order_number,
+          customerId: shippedOrder.user_id,
+          trackingId: primaryAwb
+        });
+      }
+    } catch (pushErr) {
+      console.warn('Admin ship push notification non-blocking error:', pushErr.message);
+    }
 
     res.json({
       message: 'Order shipped successfully',

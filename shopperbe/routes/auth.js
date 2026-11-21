@@ -863,6 +863,18 @@ router.post('/orders', authMiddleware, async (req, res) => {
       console.warn('Non-blocking order email delivery error:', emailErr.message);
     }
 
+    // Trigger push notifications asynchronously
+    try {
+      const pushNotificationService = require('../services/pushNotificationService');
+      pushNotificationService.notifyOrderPlaced({
+        orderNumber,
+        customerId: req.user.id,
+        vendorAccounting
+      });
+    } catch (pushErr) {
+      console.warn('Non-blocking order push notification error:', pushErr.message);
+    }
+
     res.json({ success: true, order: result.rows[0] });
   } catch (err) {
     await client.query('ROLLBACK');
@@ -1035,6 +1047,45 @@ router.get('/referrals', authMiddleware, async (req, res) => {
   } catch (err) {
     console.error('Customer referrals endpoint error:', err);
     res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/auth/device-token - Register FCM Push Token for Customer
+router.post('/device-token', authMiddleware, async (req, res) => {
+  try {
+    const { token, platform } = req.body;
+    if (!token) return res.status(400).json({ error: 'Device token is required' });
+
+    const pushNotificationService = require('../services/pushNotificationService');
+    const saved = await pushNotificationService.saveDeviceToken({
+      userId: req.user.id,
+      token,
+      platform: platform || 'android',
+      appType: 'customer'
+    });
+    res.json({ success: true, token: saved });
+  } catch (err) {
+    console.error('Save customer device token error:', err);
+    res.status(500).json({ error: 'Failed to save device token' });
+  }
+});
+
+// DELETE /api/auth/device-token - Remove FCM Push Token for Customer
+router.delete('/device-token', authMiddleware, async (req, res) => {
+  try {
+    const { token } = req.body;
+    if (!token) return res.status(400).json({ error: 'Device token is required' });
+
+    const pushNotificationService = require('../services/pushNotificationService');
+    const result = await pushNotificationService.removeDeviceToken({
+      userId: req.user.id,
+      token,
+      appType: 'customer'
+    });
+    res.json({ success: true, removed: result.removed });
+  } catch (err) {
+    console.error('Delete customer device token error:', err);
+    res.status(500).json({ error: 'Failed to delete device token' });
   }
 });
 

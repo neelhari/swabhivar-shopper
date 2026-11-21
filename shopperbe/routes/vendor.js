@@ -506,6 +506,26 @@ router.put('/orders/:id/status', async (req, res) => {
       [status, req.params.id]
     );
     await client.query('COMMIT');
+
+    // Trigger push notification to customer on status update
+    try {
+      const pushNotificationService = require('../services/pushNotificationService');
+      if (status === 'shipped') {
+        pushNotificationService.notifyOrderDispatched({
+          orderNumber: order.order_number,
+          customerId: order.user_id,
+          trackingId: order.tracking_id
+        });
+      } else if (status === 'delivered') {
+        pushNotificationService.notifyOrderDelivered({
+          orderNumber: order.order_number,
+          customerId: order.user_id
+        });
+      }
+    } catch (pushErr) {
+      console.warn('Vendor status push notification non-blocking error:', pushErr.message);
+    }
+
     res.json({ message: 'Order status updated' });
   } catch (err) {
     await client.query('ROLLBACK');
@@ -1084,6 +1104,45 @@ router.post('/close-store', async (req, res) => {
     res.status(500).json({ error: 'Server error while closing store: ' + err.message });
   } finally {
     client.release();
+  }
+});
+
+// POST /api/vendor/device-token - Register FCM Push Token for Vendor
+router.post('/device-token', async (req, res) => {
+  try {
+    const { token, platform } = req.body;
+    if (!token) return res.status(400).json({ error: 'Device token is required' });
+
+    const pushNotificationService = require('../services/pushNotificationService');
+    const saved = await pushNotificationService.saveDeviceToken({
+      vendorId: req.vendorId,
+      token,
+      platform: platform || 'android',
+      appType: 'vendor'
+    });
+    res.json({ success: true, token: saved });
+  } catch (err) {
+    console.error('Save vendor device token error:', err);
+    res.status(500).json({ error: 'Failed to save device token' });
+  }
+});
+
+// DELETE /api/vendor/device-token - Remove FCM Push Token for Vendor
+router.delete('/device-token', async (req, res) => {
+  try {
+    const { token } = req.body;
+    if (!token) return res.status(400).json({ error: 'Device token is required' });
+
+    const pushNotificationService = require('../services/pushNotificationService');
+    const result = await pushNotificationService.removeDeviceToken({
+      vendorId: req.vendorId,
+      token,
+      appType: 'vendor'
+    });
+    res.json({ success: true, removed: result.removed });
+  } catch (err) {
+    console.error('Delete vendor device token error:', err);
+    res.status(500).json({ error: 'Failed to delete device token' });
   }
 });
 

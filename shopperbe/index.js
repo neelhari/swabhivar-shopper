@@ -45,6 +45,14 @@ app.use('/api/advertisements', require('./routes/advertisements'));
 app.use('/api/wallet', require('./routes/wallet'));
 app.use('/api/returns', require('./routes/returns'));
 app.use('/api/shipping', require('./routes/shipping'));
+
+// Initialize Push Notification service
+try {
+  require('./services/pushNotificationService');
+} catch (pushInitErr) {
+  console.warn('Push notification service initialization warning:', pushInitErr.message);
+}
+
 app.use((req, res) => res.status(404).json({ error: 'API route not found' }));
 
 app.listen(PORT, () => console.log(`🚀 Server running on port ${PORT}`));

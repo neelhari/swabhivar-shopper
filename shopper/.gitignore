@@ -5,6 +5,11 @@ dist-ssr
 dist-*
 apk-output
 icon-assets
+*firebase*assets*
+firebase-assets
+firebase assets
+*google-services*.json
+*service-account*.json
 
 # Environment files
 .env
