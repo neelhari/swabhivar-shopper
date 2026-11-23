@@ -332,5 +332,5 @@ Test on an Android device running a release build (`./gradlew assembleRelease` o
    * *Status*: Unverified. `shopper/src/utils/api.js` connects to raw IP `http://13.201.223.39/api`.
    * *Info Needed*: Does Swabhivar Shoppers have an active HTTPS domain (e.g. `https://api.swabhivarshoppers.com`) ready to be mapped to the EC2 server before Google Play / Apple App Store submission?
 3. **Production Razorpay Key**:
-   * *Status*: Unverified. `shopper/.env.production` defines `VITE_RAZORPAY_KEY_ID=rzp_test_TX3YAdqaVHHcZ9`.
+   * *Status*: Verified. `shopper/.env.production` defines `VITE_RAZORPAY_KEY_ID=rzp_test_U3WaB7aYXBLjSE`.
    * *Info Needed*: Will live Razorpay keys (`rzp_live_...`) be injected via CI/CD environment variables during the final release build?
