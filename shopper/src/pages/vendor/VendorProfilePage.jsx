@@ -6,6 +6,7 @@ import {
   Power, ShieldAlert, AlertOctagon
 } from 'lucide-react';
 import { toast } from 'react-toastify';
+import { openRazorpayCheckout } from '../../services/razorpayService';
 
 const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || "http://localhost:5000/api";
 
@@ -215,10 +216,7 @@ export function VendorProfilePage() {
         prefill: { name: vendor?.name, email: vendor?.email, contact: vendor?.phone },
         theme: { color: '#012980' },
       };
-      if (!window.Razorpay) {
-        throw new Error('Payment gateway is still loading. Please check your internet connection or try again in a moment.');
-      }
-      new window.Razorpay(options).open();
+      await openRazorpayCheckout(options);
     } catch (err) {
       toast.error(err.message);
     } finally {

@@ -7,6 +7,7 @@ import { useAuthStore } from '../store/useAuthStore';
 import { useToastStore } from '../store/useToastStore';
 import { registerPageBackHandler } from '../utils/backNavigation';
 import api from '../utils/api';
+import { openRazorpayCheckout } from '../services/razorpayService';
 import gsap from 'gsap';
 import { useGSAP } from '@gsap/react';
 
@@ -206,13 +207,6 @@ export function CheckoutPage() {
   const handlePlaceOrder = async () => {
     setIsPlacingOrder(true);
     try {
-      const res = await loadRazorpay();
-      if (!res) {
-        alert('Razorpay SDK failed to load. Are you online?');
-        setIsPlacingOrder(false);
-        return;
-      }
-
       // Amount to charge online: ₹1 for COD, full amount for prepaid
       const chargeAmount = paymentMethod === 'cod' ? COD_ADVANCE : grandTotal;
 
@@ -299,8 +293,7 @@ export function CheckoutPage() {
         }
       };
 
-      const paymentObject = new window.Razorpay(options);
-      paymentObject.open();
+      await openRazorpayCheckout(options);
     } catch (err) {
       console.error(err);
       setIsPlacingOrder(false);

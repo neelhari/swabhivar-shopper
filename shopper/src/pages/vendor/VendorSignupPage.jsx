@@ -4,6 +4,7 @@ import { Mail, Lock, User, Phone, Store, ArrowRight, ShieldCheck, CheckCircle2, 
 import { toast } from 'react-toastify';
 import logo from '../../assets/logo.png';
 import { useAuthStore } from '../../store/useAuthStore';
+import { openRazorpayCheckout } from '../../services/razorpayService';
 
 const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || "http://localhost:5000/api";
 
@@ -142,12 +143,7 @@ export function VendorSignupPage() {
         prefill: { name: `${formData.firstName} ${formData.lastName}`, email: formData.email, contact: formData.phone },
         theme: { color: '#012980' },
       };
-      if (!window.Razorpay) {
-        throw new Error('Payment gateway is still loading. Please check your internet connection or try again in a moment.');
-      }
-      const rzp = new window.Razorpay(options);
-      rzp.on('payment.failed', () => { setError('Payment failed. Please try again.'); });
-      rzp.open();
+      await openRazorpayCheckout(options);
     } catch (err) {
       setError(err.message);
     } finally {
