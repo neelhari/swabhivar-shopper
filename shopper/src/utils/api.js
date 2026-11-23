@@ -2,7 +2,7 @@ import axios from 'axios';
 import { Capacitor } from '@capacitor/core';
 
 // Production EC2 endpoint for native mobile application
-const PRODUCTION_API_URL = 'http://13.201.223.39/api';
+const PRODUCTION_API_URL = 'https://api.swabhivar.com/api';
 
 export const resolveBackendUrl = (url) => {
   // If running inside Capacitor native shell and configured URL is relative, route to production server

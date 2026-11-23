@@ -2,7 +2,7 @@ import { create } from 'zustand';
 import api, { BACKEND_URL } from '../utils/api';
 import { registerPushNotifications, unregisterPushNotifications } from '../services/pushNotificationService';
 
-const BACKEND = BACKEND_URL.replace('/api', '') || 'http://13.201.223.39';
+const BACKEND = BACKEND_URL.replace('/api', '') || 'https://api.swabhivar.com';
 
 
 export const useAuthStore = create((set, get) => ({

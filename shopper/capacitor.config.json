@@ -1,12 +1,12 @@
 {
-  "appId": "com.swabhivar.vendor",
-  "appName": "Swabhivar Vendor",
-  "webDir": "dist-vendor",
+  "appId": "com.swabhivar.shoppers",
+  "appName": "Swabhivar Shoppers",
+  "webDir": "dist-customer",
   "server": {
     "androidScheme": "https"
   },
   "android": {
-    "path": "android-vendor",
+    "path": "android",
     "allowMixedContent": true
   },
   "plugins": {
