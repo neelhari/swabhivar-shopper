@@ -15,10 +15,12 @@ app.use(cors({
       'http://localhost',
       'capacitor://localhost',
       'https://shopper-wheat.vercel.app',
+      'https://swabhivar.com',
+      'https://www.swabhivar.com',
       process.env.FRONTEND_URL,
     ].filter(Boolean);
 
-    if (!origin || allowed.includes(origin) || /\.vercel\.app$/.test(origin)) {
+    if (!origin || allowed.includes(origin) || /\.vercel\.app$/.test(origin) || /(^|\.)swabhivar\.com$/.test(origin.replace(/^https?:\/\//, ''))) {
       callback(null, true);
     } else {
       callback(null, false);
