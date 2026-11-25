@@ -650,7 +650,7 @@ router.post('/reset-password', async (req, res) => {
 
 // POST /api/auth/login - Supports Registered Mobile Number OR Email Address + Password
 router.post('/login', async (req, res) => {
-  const { email, password, loginId } = req.body;
+  const { email, password, loginId } = req.body || {};
   const identifier = (loginId || email || '').trim();
   if (!identifier || !password) return res.status(400).json({ error: 'Mobile number or email address and password required' });
 
