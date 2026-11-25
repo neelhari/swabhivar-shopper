@@ -36,6 +36,70 @@ import { SupportCategoriesPage } from '../pages/support/SupportCategoriesPage';
 import { VendorWalletPage } from '../pages/vendor/VendorWalletPage';
 import { VendorProfilePage } from '../pages/vendor/VendorProfilePage';
 
+export { AdminLoginPage, SupportLoginPage };
+
+export function AdminSection() {
+  return (
+    <AdminLayout>
+      <Routes>
+        <Route path="/" element={<AdminDashboardPage />} />
+        <Route path="/orders" element={<AdminOrdersPage />} />
+        <Route path="customers" element={<AdminCustomersPage />} />
+        <Route path="products" element={<AdminProductsPage />} />
+        <Route path="products/new" element={<AdminProductFormPage />} />
+        <Route path="products/:id/edit" element={<AdminProductFormPage />} />
+        <Route path="categories" element={<AdminCategoriesPage />} />
+        <Route path="banners" element={<AdminBannersPage />} />
+        <Route path="/coupons" element={<AdminCouponsPage />} />
+        <Route path="/reports" element={<AdminReportsPage />} />
+        <Route path="vendor-requests" element={<AdminVendorRequestsPage />} />
+        <Route path="vendor-profiles" element={<AdminVendorProfilesPage />} />
+        <Route path="vendor-products" element={<AdminVendorProductsPage />} />
+        <Route path="vendor-wallets" element={<AdminVendorWalletsPage />} />
+        <Route path="vendor-orders" element={<AdminVendorOrdersPage />} />
+        <Route path="support" element={<AdminSupportPage />} />
+        <Route path="subscriptions" element={<AdminSubscriptionsPage />} />
+        <Route path="offers" element={<AdminOffersPage />} />
+        <Route path="advertisements" element={<AdminAdvertisementsPage />} />
+        <Route path="product-requests" element={<AdminProductRequestsPage />} />
+        <Route path="payouts" element={<AdminReferralPayoutsPage />} />
+        <Route path="returns" element={<AdminReturnsPage />} />
+        <Route path="settings" element={<AdminSettingsPage />} />
+      </Routes>
+    </AdminLayout>
+  );
+}
+
+export function SupportSection() {
+  return (
+    <SupportLayout>
+      <Routes>
+        <Route path="/" element={<SupportDashboardPage />} />
+        <Route path="dashboard" element={<SupportDashboardPage />} />
+        <Route path="orders" element={<SupportOrdersPage />} />
+        <Route path="products" element={<SupportProductsPage />} />
+        <Route path="categories" element={<SupportCategoriesPage />} />
+        {/* Admin-scope support pages */}
+        <Route path="customers" element={<AdminCustomersPage />} />
+        <Route path="banners" element={<AdminBannersPage />} />
+        <Route path="coupons" element={<AdminCouponsPage />} />
+        <Route path="reports" element={<AdminReportsPage />} />
+        <Route path="vendor-requests" element={<AdminVendorRequestsPage />} />
+        <Route path="vendor-profiles" element={<AdminVendorProfilesPage />} />
+        <Route path="vendor-products" element={<AdminVendorProductsPage />} />
+        <Route path="vendor-wallets" element={<AdminVendorWalletsPage />} />
+        <Route path="vendor-orders" element={<AdminVendorOrdersPage />} />
+        <Route path="subscriptions" element={<AdminSubscriptionsPage />} />
+        <Route path="offers" element={<AdminOffersPage />} />
+        <Route path="advertisements" element={<AdminAdvertisementsPage />} />
+        {/* Vendor-scope support pages */}
+        <Route path="wallet" element={<VendorWalletPage />} />
+        <Route path="profile" element={<VendorProfilePage />} />
+      </Routes>
+    </SupportLayout>
+  );
+}
+
 export function AdminRoutes() {
   return (
     <Routes>
@@ -44,64 +108,10 @@ export function AdminRoutes() {
       <Route path="/support-login" element={<SupportLoginPage />} />
 
       {/* Admin — using AdminLayout */}
-      <Route path="/admin/*" element={
-        <AdminLayout>
-          <Routes>
-            <Route path="/" element={<AdminDashboardPage />} />
-            <Route path="/orders" element={<AdminOrdersPage />} />
-            <Route path="customers" element={<AdminCustomersPage />} />
-            <Route path="products" element={<AdminProductsPage />} />
-            <Route path="products/new" element={<AdminProductFormPage />} />
-            <Route path="products/:id/edit" element={<AdminProductFormPage />} />
-            <Route path="categories" element={<AdminCategoriesPage />} />
-            <Route path="banners" element={<AdminBannersPage />} />
-            <Route path="/coupons" element={<AdminCouponsPage />} />
-            <Route path="/reports" element={<AdminReportsPage />} />
-            <Route path="vendor-requests" element={<AdminVendorRequestsPage />} />
-            <Route path="vendor-profiles" element={<AdminVendorProfilesPage />} />
-            <Route path="vendor-products" element={<AdminVendorProductsPage />} />
-            <Route path="vendor-wallets" element={<AdminVendorWalletsPage />} />
-            <Route path="vendor-orders" element={<AdminVendorOrdersPage />} />
-            <Route path="support" element={<AdminSupportPage />} />
-            <Route path="subscriptions" element={<AdminSubscriptionsPage />} />
-            <Route path="offers" element={<AdminOffersPage />} />
-            <Route path="advertisements" element={<AdminAdvertisementsPage />} />
-            <Route path="product-requests" element={<AdminProductRequestsPage />} />
-            <Route path="payouts" element={<AdminReferralPayoutsPage />} />
-            <Route path="returns" element={<AdminReturnsPage />} />
-            <Route path="settings" element={<AdminSettingsPage />} />
-          </Routes>
-        </AdminLayout>
-      } />
+      <Route path="/admin/*" element={<AdminSection />} />
 
       {/* Support — using SupportLayout */}
-      <Route path="/support/*" element={
-        <SupportLayout>
-          <Routes>
-            <Route path="/" element={<SupportDashboardPage />} />
-            <Route path="dashboard" element={<SupportDashboardPage />} />
-            <Route path="orders" element={<SupportOrdersPage />} />
-            <Route path="products" element={<SupportProductsPage />} />
-            <Route path="categories" element={<SupportCategoriesPage />} />
-            {/* Admin-scope support pages */}
-            <Route path="customers" element={<AdminCustomersPage />} />
-            <Route path="banners" element={<AdminBannersPage />} />
-            <Route path="coupons" element={<AdminCouponsPage />} />
-            <Route path="reports" element={<AdminReportsPage />} />
-            <Route path="vendor-requests" element={<AdminVendorRequestsPage />} />
-            <Route path="vendor-profiles" element={<AdminVendorProfilesPage />} />
-            <Route path="vendor-products" element={<AdminVendorProductsPage />} />
-            <Route path="vendor-wallets" element={<AdminVendorWalletsPage />} />
-            <Route path="vendor-orders" element={<AdminVendorOrdersPage />} />
-            <Route path="subscriptions" element={<AdminSubscriptionsPage />} />
-            <Route path="offers" element={<AdminOffersPage />} />
-            <Route path="advertisements" element={<AdminAdvertisementsPage />} />
-            {/* Vendor-scope support pages */}
-            <Route path="wallet" element={<VendorWalletPage />} />
-            <Route path="profile" element={<VendorProfilePage />} />
-          </Routes>
-        </SupportLayout>
-      } />
+      <Route path="/support/*" element={<SupportSection />} />
 
       {/* Fallback */}
       <Route path="*" element={<Navigate to="/admin-login" replace />} />

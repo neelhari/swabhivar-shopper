@@ -12,9 +12,10 @@ import { registerPushNotifications } from './services/pushNotificationService';
 import { CustomerRoutes } from './routes/CustomerRoutes';
 import { VendorRoutes } from './routes/VendorRoutes';
 import { AdminRoutes } from './routes/AdminRoutes';
+import { WebRoutes } from './routes/WebRoutes';
 
 function App() {
-  const target = import.meta.env.VITE_APP_TARGET || 'customer';
+  const target = import.meta.env.VITE_APP_TARGET;
 
   const isSpecialRoute = typeof window !== 'undefined' && (
     window.location.pathname.startsWith('/admin') ||
@@ -67,7 +68,7 @@ function App() {
   }, []);
 
   useEffect(() => {
-    if (target === 'customer') {
+    if (!target || target === 'customer') {
       if (token) {
         fetchCart();
         registerPushNotifications('customer');
@@ -87,8 +88,10 @@ function App() {
             <VendorRoutes />
           ) : target === 'admin' ? (
             <AdminRoutes />
-          ) : (
+          ) : target === 'customer' ? (
             <CustomerRoutes />
+          ) : (
+            <WebRoutes />
           )}
         </BrowserRouter>
       </div>

@@ -47,7 +47,7 @@ function PageTransition({ children }) {
   );
 }
 
-function AnimatedAppRoutes() {
+export function AnimatedAppRoutes() {
   const location = useLocation();
   return (
     <AnimatePresence mode="popLayout">
@@ -83,6 +83,8 @@ function AnimatedAppRoutes() {
     </AnimatePresence>
   );
 }
+
+export { LoginPage, SignupPage };
 
 export function CustomerRoutes() {
   return (

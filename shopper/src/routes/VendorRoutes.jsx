@@ -16,6 +16,30 @@ import { VendorReferralPage } from '../pages/vendor/VendorReferralPage';
 import { VendorRevenuePage } from '../pages/vendor/VendorRevenuePage';
 import { VendorReturnsPage } from '../pages/vendor/VendorReturnsPage';
 
+export { VendorLoginPage, VendorSignupPage };
+
+export function VendorSection() {
+  return (
+    <VendorLayout>
+      <Routes>
+        <Route path="/" element={<VendorDashboardPage />} />
+        <Route path="products" element={<VendorProductsPage />} />
+        <Route path="products/new" element={<VendorProductFormPage />} />
+        <Route path="products/:id/edit" element={<VendorProductFormPage />} />
+        <Route path="orders" element={<VendorOrdersPage />} />
+        <Route path="returns" element={<VendorReturnsPage />} />
+        <Route path="categories" element={<VendorCategoriesPage />} />
+        <Route path="wallet" element={<VendorWalletPage />} />
+        <Route path="profile" element={<VendorProfilePage />} />
+        <Route path="support" element={<VendorSupportPage />} />
+        <Route path="offers" element={<VendorOffersPage />} />
+        <Route path="referrals" element={<VendorReferralPage />} />
+        <Route path="revenue" element={<VendorRevenuePage />} />
+      </Routes>
+    </VendorLayout>
+  );
+}
+
 export function VendorRoutes() {
   return (
     <Routes>
@@ -24,25 +48,7 @@ export function VendorRoutes() {
       <Route path="/vendor-signup" element={<VendorSignupPage />} />
 
       {/* Vendor — using VendorLayout */}
-      <Route path="/vendor/*" element={
-        <VendorLayout>
-          <Routes>
-            <Route path="/" element={<VendorDashboardPage />} />
-            <Route path="products" element={<VendorProductsPage />} />
-            <Route path="products/new" element={<VendorProductFormPage />} />
-            <Route path="products/:id/edit" element={<VendorProductFormPage />} />
-            <Route path="orders" element={<VendorOrdersPage />} />
-            <Route path="returns" element={<VendorReturnsPage />} />
-            <Route path="categories" element={<VendorCategoriesPage />} />
-            <Route path="wallet" element={<VendorWalletPage />} />
-            <Route path="profile" element={<VendorProfilePage />} />
-            <Route path="support" element={<VendorSupportPage />} />
-            <Route path="offers" element={<VendorOffersPage />} />
-            <Route path="referrals" element={<VendorReferralPage />} />
-            <Route path="revenue" element={<VendorRevenuePage />} />
-          </Routes>
-        </VendorLayout>
-      } />
+      <Route path="/vendor/*" element={<VendorSection />} />
 
       {/* Fallback */}
       <Route path="*" element={<Navigate to="/vendor-login" replace />} />
