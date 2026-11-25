@@ -1,3 +1,4 @@
+const axios = require('axios');
 const router = require('express').Router();
 const pool = require('../db');
 const bcrypt = require('bcryptjs');
@@ -1120,6 +1121,215 @@ router.delete('/device-token', authMiddleware, async (req, res) => {
   } catch (err) {
     console.error('Delete customer device token error:', err);
     res.status(500).json({ error: 'Failed to delete device token' });
+  }
+});
+
+// ==========================================
+// GOOGLE OAUTH 2.0 IMPLEMENTATION
+// ==========================================
+
+// Helper to determine redirect URI based on environment
+function getGoogleRedirectUri(req) {
+  const host = req.get('host') || '';
+  if (host.includes('localhost') || host.includes('127.0.0.1')) {
+    return 'http://localhost:5000/api/auth/google/callback';
+  }
+  return process.env.GOOGLE_REDIRECT_URI || 'https://api.swabhivar.com/api/auth/google/callback';
+}
+
+// 1. GET /api/auth/google - Initiate Google Login
+router.get('/google', (req, res) => {
+  const clientId = process.env.GOOGLE_CLIENT_ID;
+  if (!clientId) {
+    return res.status(500).json({ error: 'Google OAuth Client ID is not configured on server' });
+  }
+
+  const redirectUri = getGoogleRedirectUri(req);
+  const host = req.get('host') || '';
+  const defaultOrigin = (host.includes('localhost') || host.includes('127.0.0.1'))
+    ? 'http://localhost:5173'
+    : 'https://swabhivar.com';
+
+  const origin = req.query.origin || defaultOrigin;
+  const state = Buffer.from(JSON.stringify({ origin })).toString('base64');
+  const scope = encodeURIComponent('openid profile email');
+
+  const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${clientId}&redirect_uri=${encodeURIComponent(redirectUri)}&response_type=code&scope=${scope}&state=${encodeURIComponent(state)}&access_type=offline&prompt=select_account`;
+
+  res.redirect(authUrl);
+});
+
+// 2. GET /api/auth/google/callback - Handle Google OAuth redirect
+router.get('/google/callback', async (req, res) => {
+  const { code, state, error } = req.query;
+
+  let frontendOrigin = 'https://swabhivar.com';
+  if (state) {
+    try {
+      const decoded = JSON.parse(Buffer.from(decodeURIComponent(state), 'base64').toString('utf8'));
+      if (decoded.origin) frontendOrigin = decoded.origin;
+    } catch (e) {
+      console.warn('Could not decode state origin in Google OAuth:', e.message);
+    }
+  }
+
+  if (error || !code) {
+    console.error('Google OAuth cancelled or error:', error);
+    return res.redirect(`${frontendOrigin}/login?error=${encodeURIComponent(error || 'Google login was cancelled')}`);
+  }
+
+  try {
+    const clientId = process.env.GOOGLE_CLIENT_ID;
+    const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
+    const redirectUri = getGoogleRedirectUri(req);
+
+    // Exchange auth code for tokens
+    const tokenResponse = await axios.post('https://oauth2.googleapis.com/token', {
+      code,
+      client_id: clientId,
+      client_secret: clientSecret,
+      redirect_uri: redirectUri,
+      grant_type: 'authorization_code'
+    }, {
+      headers: { 'Content-Type': 'application/json' }
+    });
+
+    const { access_token } = tokenResponse.data;
+
+    // Fetch user profile from Google
+    const profileResponse = await axios.get('https://www.googleapis.com/oauth2/v3/userinfo', {
+      headers: { Authorization: `Bearer ${access_token}` }
+    });
+
+    const { email, name, picture } = profileResponse.data;
+    if (!email) {
+      return res.redirect(`${frontendOrigin}/login?error=${encodeURIComponent('No email associated with Google account')}`);
+    }
+
+    const cleanEmail = email.toLowerCase().trim();
+
+    // Find or create customer user in database
+    let userRow;
+    const existing = await pool.query(
+      'SELECT id, name, email, phone, role, is_verified, wallet_balance, avatar_url FROM users WHERE LOWER(email)=$1',
+      [cleanEmail]
+    );
+
+    if (existing.rows.length > 0) {
+      userRow = existing.rows[0];
+      // Ensure verified is true and update avatar if missing
+      if (!userRow.is_verified || (!userRow.avatar_url && picture)) {
+        await pool.query(
+          'UPDATE users SET is_verified=TRUE, avatar_url=COALESCE(avatar_url, $1) WHERE id=$2',
+          [picture || null, userRow.id]
+        );
+      }
+    } else {
+      const randomPassword = await bcrypt.hash(Math.random().toString(36) + Date.now().toString(), 10);
+      const referralCode = Math.random().toString(36).substring(2, 8).toLowerCase();
+      const insertResult = await pool.query(
+        `INSERT INTO users (name, email, phone, password_hash, is_verified, role, avatar_url, referral_code)
+         VALUES ($1, $2, $3, $4, TRUE, 'user', $5, $6)
+         RETURNING id, name, email, phone, role, is_verified, wallet_balance, avatar_url`,
+        [name || 'Customer', cleanEmail, '', randomPassword, picture || null, referralCode]
+      );
+      userRow = insertResult.rows[0];
+    }
+
+    // Sign JWT token valid for 30 days
+    const token = jwt.sign(
+      { id: userRow.id, email: userRow.email, role: userRow.role || 'user' },
+      JWT_SECRET,
+      { expiresIn: '30d' }
+    );
+
+    const safeUser = {
+      id: userRow.id,
+      name: userRow.name || name || 'Customer',
+      email: userRow.email,
+      phone: userRow.phone || '',
+      role: userRow.role || 'user',
+      avatar_url: userRow.avatar_url || picture || null,
+      wallet_balance: Number(userRow.wallet_balance || 0)
+    };
+
+    res.redirect(`${frontendOrigin}/login?token=${token}&user=${encodeURIComponent(JSON.stringify(safeUser))}`);
+  } catch (err) {
+    console.error('Google OAuth callback handler error:', err?.response?.data || err.message);
+    res.redirect(`${frontendOrigin}/login?error=${encodeURIComponent('Failed to sign in with Google. Please try again.')}`);
+  }
+});
+
+// 3. POST /api/auth/google/verify - Verify native Android ID Token (Direct)
+router.post('/google/verify', async (req, res) => {
+  try {
+    const { idToken } = req.body;
+    if (!idToken) return res.status(400).json({ error: 'idToken is required' });
+
+    // Validate ID token directly via Google API
+    const tokenInfoRes = await axios.get(`https://oauth2.googleapis.com/tokeninfo?id_token=${idToken}`);
+    const { email, name, picture, aud } = tokenInfoRes.data;
+
+    // Verify audience matches either Web or Android Client ID
+    const validAudiences = [
+      process.env.GOOGLE_CLIENT_ID,
+      process.env.GOOGLE_ANDROID_CLIENT_ID
+    ].filter(Boolean);
+
+    if (validAudiences.length > 0 && !validAudiences.includes(aud)) {
+      console.warn('Google token audience mismatch:', aud);
+    }
+
+    if (!email) {
+      return res.status(400).json({ error: 'No email found in Google token' });
+    }
+
+    const cleanEmail = email.toLowerCase().trim();
+    let userRow;
+    const existing = await pool.query(
+      'SELECT id, name, email, phone, role, is_verified, wallet_balance, avatar_url FROM users WHERE LOWER(email)=$1',
+      [cleanEmail]
+    );
+
+    if (existing.rows.length > 0) {
+      userRow = existing.rows[0];
+      if (!userRow.is_verified) {
+        await pool.query('UPDATE users SET is_verified=TRUE WHERE id=$1', [userRow.id]);
+      }
+    } else {
+      const randomPassword = await bcrypt.hash(Math.random().toString(36) + Date.now().toString(), 10);
+      const referralCode = Math.random().toString(36).substring(2, 8).toLowerCase();
+      const insertResult = await pool.query(
+        `INSERT INTO users (name, email, phone, password_hash, is_verified, role, avatar_url, referral_code)
+         VALUES ($1, $2, $3, $4, TRUE, 'user', $5, $6)
+         RETURNING id, name, email, phone, role, is_verified, wallet_balance, avatar_url`,
+        [name || 'Customer', cleanEmail, '', randomPassword, picture || null, referralCode]
+      );
+      userRow = insertResult.rows[0];
+    }
+
+    const token = jwt.sign(
+      { id: userRow.id, email: userRow.email, role: userRow.role || 'user' },
+      JWT_SECRET,
+      { expiresIn: '30d' }
+    );
+
+    res.json({
+      success: true,
+      token,
+      user: {
+        id: userRow.id,
+        name: userRow.name || name,
+        email: userRow.email,
+        phone: userRow.phone || '',
+        role: userRow.role || 'user',
+        avatar_url: userRow.avatar_url || picture || null,
+        wallet_balance: Number(userRow.wallet_balance || 0)
+      }
+    });
+  } catch (err) {
+    console.error('Google ID token verification error:', err?.response?.data || err.message);
+    res.status(500).json({ error: 'Invalid Google authentication token' });
   }
 });
 

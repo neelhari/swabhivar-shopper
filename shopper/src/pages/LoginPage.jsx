@@ -32,7 +32,10 @@ export function LoginPage() {
   useEffect(() => {
     const token = searchParams.get('token');
     const userStr = searchParams.get('user');
-    if (token) {
+    const errorParam = searchParams.get('error');
+    if (errorParam) {
+      setLocalError(decodeURIComponent(errorParam));
+    } else if (token) {
       try {
         const user = userStr ? JSON.parse(decodeURIComponent(userStr)) : null;
         handleGoogleCallback(token, user);
