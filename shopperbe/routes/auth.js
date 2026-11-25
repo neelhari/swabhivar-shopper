@@ -648,38 +648,72 @@ router.post('/reset-password', async (req, res) => {
   }
 });
 
-// POST /api/auth/login - Supports Mobile Number OR Email + Password
+// POST /api/auth/login - Supports Registered Mobile Number OR Email Address + Password
 router.post('/login', async (req, res) => {
   const { email, password, loginId } = req.body;
   const identifier = (loginId || email || '').trim();
-  if (!identifier || !password) return res.status(400).json({ error: 'Mobile number or email and password required' });
+  if (!identifier || !password) return res.status(400).json({ error: 'Mobile number or email address and password required' });
 
   try {
     const rawDigits = identifier.replace(/\D/g, '');
-    const isPhone = !identifier.includes('@') && rawDigits.length >= 10;
+    const isPotentialPhone = rawDigits.length >= 10 && !identifier.includes('@');
     let result;
 
-    if (isPhone) {
+    if (isPotentialPhone) {
       const tenDigit = rawDigits.slice(-10);
       result = await pool.query(
-        'SELECT * FROM users WHERE phone = $1 OR phone = $2 OR phone = $3 ORDER BY id DESC LIMIT 1',
+        'SELECT * FROM users WHERE phone = $1 OR phone = $2 OR phone = $3 ORDER BY id DESC',
         [tenDigit, '91' + tenDigit, '+91' + tenDigit]
       );
     } else {
       const cleanEmail = identifier.toLowerCase();
-      result = await pool.query('SELECT * FROM users WHERE LOWER(email)=$1 ORDER BY id DESC LIMIT 1', [cleanEmail]);
+      result = await pool.query('SELECT * FROM users WHERE LOWER(email) = $1 ORDER BY id DESC', [cleanEmail]);
     }
 
     if (!result.rows.length) return res.status(401).json({ error: 'Invalid credentials' });
 
-    const user = result.rows[0];
-    if (!user.is_verified) return res.status(403).json({ error: 'Please verify your mobile number with the SMS OTP sent to your phone before logging in.' });
+    // Safely authenticate matching account across candidates (handling potential duplicate historical phones safely)
+    let authenticatedUser = null;
+    let hasUnverifiedMatch = false;
 
-    const valid = await bcrypt.compare(password, user.password_hash);
-    if (!valid) return res.status(401).json({ error: 'Invalid credentials' });
+    for (const candidate of result.rows) {
+      const isMatch = await bcrypt.compare(password, candidate.password_hash);
+      if (isMatch) {
+        if (!candidate.is_verified) {
+          hasUnverifiedMatch = true;
+          continue; // check if there is an active verified account matching credentials
+        }
+        authenticatedUser = candidate;
+        break;
+      }
+    }
 
-    const token = jwt.sign({ id: user.id, email: user.email, role: user.role }, JWT_SECRET, { expiresIn: '7d' });
-    res.json({ token, user: { id: user.id, name: user.name, email: user.email, phone: user.phone, role: user.role, referral_code: user.referral_code, wallet_balance: user.wallet_balance } });
+    if (!authenticatedUser && hasUnverifiedMatch) {
+      return res.status(403).json({ error: 'Please verify your mobile number with the SMS OTP sent to your phone before logging in.' });
+    }
+
+    if (!authenticatedUser) {
+      return res.status(401).json({ error: 'Invalid credentials' });
+    }
+
+    const token = jwt.sign(
+      { id: authenticatedUser.id, email: authenticatedUser.email, role: authenticatedUser.role },
+      JWT_SECRET,
+      { expiresIn: '7d' }
+    );
+
+    res.json({
+      token,
+      user: {
+        id: authenticatedUser.id,
+        name: authenticatedUser.name,
+        email: authenticatedUser.email,
+        phone: authenticatedUser.phone,
+        role: authenticatedUser.role,
+        referral_code: authenticatedUser.referral_code,
+        wallet_balance: authenticatedUser.wallet_balance
+      }
+    });
   } catch (err) {
     console.error('Customer login error:', err);
     res.status(500).json({ error: 'Server error during login' });

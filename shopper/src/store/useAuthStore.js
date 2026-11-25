@@ -55,10 +55,10 @@ export const useAuthStore = create((set, get) => ({
     }
   },
 
-  login: async (email, password) => {
+  login: async (identifier, password) => {
     set({ loading: true, error: null });
     try {
-      const { data } = await api.post('/auth/login', { email, password });
+      const { data } = await api.post('/auth/login', { loginId: identifier, email: identifier, password });
       localStorage.setItem('token', data.token);
       set({ token: data.token, user: data.user, loading: false });
       registerPushNotifications('customer');

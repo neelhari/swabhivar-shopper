@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
-import { Eye, EyeOff, ArrowLeft, Mail, Lock, ShieldCheck } from 'lucide-react';
+import { Eye, EyeOff, ArrowLeft, Mail, Lock, ShieldCheck, User } from 'lucide-react';
 import { useAuthStore } from '../store/useAuthStore';
 import logo from '../assets/logo.png';
 
@@ -188,8 +188,8 @@ export function LoginPage() {
             <>
               <form onSubmit={handleSubmit} className="space-y-4">
                 <div className="relative">
-                  <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
-                  <input name="email" type="text" value={form.email} onChange={handleChange} required placeholder="Mobile number or Email address" className={inputClass} />
+                  <User className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
+                  <input name="email" type="text" value={form.email} onChange={handleChange} required placeholder="Mobile Number / Email Address" className={inputClass} />
                 </div>
                 <div className="relative">
                   <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />

@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Eye, EyeOff, Mail, Lock, ArrowRight, Store, ArrowLeft } from 'lucide-react';
+import { Eye, EyeOff, Mail, Lock, ArrowRight, Store, ArrowLeft, User } from 'lucide-react';
 import { toast } from 'react-toastify';
 import logo from '../../assets/logo.png';
 import { registerPushNotifications } from '../../services/pushNotificationService';
@@ -148,15 +148,15 @@ export function VendorLoginPage() {
           {step === 'login' && (
             <form onSubmit={handleLoginSubmit} className="space-y-5 mt-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1.5">Email or Mobile Number</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1.5">Mobile Number / Email Address</label>
                 <div className="relative">
                   <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                    <Mail className="h-5 w-5 text-gray-400" />
+                    <User className="h-5 w-5 text-gray-400" />
                   </div>
                   <input
                     type="text" required value={email} onChange={(e) => setEmail(e.target.value)}
                     className="block w-full pl-12 pr-4 py-3.5 bg-gray-50/50 border border-gray-200 rounded-[16px] text-gray-900 focus:bg-white focus:ring-2 focus:ring-[#012980]/30 focus:border-[#012980] transition-all shadow-inner"
-                    placeholder="Mobile number or email address"
+                    placeholder="Mobile Number / Email Address"
                   />
                 </div>
               </div>

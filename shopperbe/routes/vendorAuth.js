@@ -473,49 +473,82 @@ router.post('/verify-otp', async (req, res) => {
   }
 });
 
-// Login - Supports Mobile Number OR Email + Password
+// Login - Supports Registered Mobile Number OR Email Address + Password
 router.post('/login', async (req, res) => {
   const { email, password, loginId } = req.body;
   const identifier = (loginId || email || '').trim();
-  if (!identifier || !password) return res.status(400).json({ error: 'Mobile number or email and password required' });
+  if (!identifier || !password) return res.status(400).json({ error: 'Mobile number or email address and password required' });
 
   try {
     const rawDigits = identifier.replace(/\D/g, '');
-    const isPhone = !identifier.includes('@') && rawDigits.length >= 10;
+    const isPotentialPhone = rawDigits.length >= 10 && !identifier.includes('@');
     let result;
 
-    if (isPhone) {
+    if (isPotentialPhone) {
       const tenDigit = rawDigits.slice(-10);
+      const phoneCandidates = [tenDigit, '91' + tenDigit, '+91' + tenDigit];
       result = await pool.query(
-        'SELECT * FROM vendors WHERE phone = $1 OR pickup_phone = $1 ORDER BY id DESC LIMIT 1',
-        [tenDigit]
+        'SELECT * FROM vendors WHERE phone = ANY($1::text[]) OR pickup_phone = ANY($1::text[]) ORDER BY id DESC',
+        [phoneCandidates]
       );
     } else {
-      result = await pool.query('SELECT * FROM vendors WHERE LOWER(email) = LOWER($1) ORDER BY id DESC LIMIT 1', [identifier]);
+      const cleanEmail = identifier.toLowerCase();
+      result = await pool.query('SELECT * FROM vendors WHERE LOWER(email) = $1 ORDER BY id DESC', [cleanEmail]);
     }
 
     if (result.rows.length === 0) return res.status(400).json({ error: 'Invalid credentials' });
 
-    const vendor = result.rows[0];
-    const match = await bcrypt.compare(password, vendor.password_hash);
-    if (!match) return res.status(400).json({ error: 'Invalid credentials' });
+    // Authenticate matching vendor account across candidates (handling potential duplicate phones safely)
+    let authenticatedVendor = null;
+    let restrictedVendor = null;
 
-    if (vendor.status === 'pending') {
-      return res.status(403).json({ error: 'The application is under review. Once admin approves you can login here.' });
-    }
-    if (vendor.status === 'rejected') {
-      return res.status(403).json({ error: 'Your vendor application has been rejected by the admin.' });
-    }
-    if (vendor.status === 'unverified') {
-      return res.status(403).json({ error: 'Please verify your mobile number via the SMS OTP sent during signup before logging in.' });
-    }
-    if (vendor.status === 'closed') {
-      return res.status(403).json({ error: 'This vendor store has been deactivated and closed. Please contact administration to request reactivation.' });
+    for (const candidate of result.rows) {
+      const isMatch = await bcrypt.compare(password, candidate.password_hash);
+      if (isMatch) {
+        if (candidate.status !== 'approved') {
+          restrictedVendor = candidate;
+          continue; // check if there is an approved account matching credentials
+        }
+        authenticatedVendor = candidate;
+        break;
+      }
     }
 
-    const token = jwt.sign({ id: vendor.id, role: 'vendor' }, process.env.JWT_SECRET, { expiresIn: '7d' });
-    res.json({ token, vendor: { id: vendor.id, name: vendor.name, email: vendor.email, store_name: vendor.store_name } });
+    // If an approved vendor matched, authenticate them
+    if (authenticatedVendor) {
+      const token = jwt.sign({ id: authenticatedVendor.id, role: 'vendor' }, process.env.JWT_SECRET, { expiresIn: '7d' });
+      return res.json({
+        token,
+        vendor: {
+          id: authenticatedVendor.id,
+          name: authenticatedVendor.name,
+          email: authenticatedVendor.email,
+          store_name: authenticatedVendor.store_name
+        }
+      });
+    }
+
+    // If a restricted vendor matched their password, enforce appropriate restriction
+    if (restrictedVendor) {
+      if (restrictedVendor.status === 'pending') {
+        return res.status(403).json({ error: 'The application is under review. Once admin approves you can login here.' });
+      }
+      if (restrictedVendor.status === 'rejected') {
+        return res.status(403).json({ error: 'Your vendor application has been rejected by the admin.' });
+      }
+      if (restrictedVendor.status === 'unverified') {
+        return res.status(403).json({ error: 'Please verify your mobile number via the SMS OTP sent during signup before logging in.' });
+      }
+      if (restrictedVendor.status === 'closed') {
+        return res.status(403).json({ error: 'This vendor store has been deactivated and closed. Please contact administration to request reactivation.' });
+      }
+      return res.status(403).json({ error: `Vendor account status: ${restrictedVendor.status}. Login not allowed.` });
+    }
+
+    // No vendor matched password
+    return res.status(400).json({ error: 'Invalid credentials' });
   } catch (err) {
+    console.error('Vendor login error:', err);
     res.status(500).json({ error: err.message });
   }
 });
@@ -653,7 +686,7 @@ const vendorAuthMiddleware = async (req, res, next) => {
 router.get('/me', vendorAuthMiddleware, async (req, res) => {
   try {
     const result = await pool.query(
-      `SELECT v.id, v.name, v.store_name, v.email, v.phone, v.address, v.status,
+      `SELECT v.id, v.name, v.username, v.store_name, v.email, v.phone, v.address, v.status,
               v.wallet_balance, COALESCE(v.outstanding_debt, 0) as outstanding_debt,
               v.subscription_expires_at, v.created_at, v.referral_code,
               v.bank_account_holder_name, v.bank_account_number, v.bank_ifsc_code, v.bank_name,

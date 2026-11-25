@@ -3,7 +3,8 @@ import { Link, useNavigate } from 'react-router-dom';
 import { 
   Package, ShoppingBag, FileText, RefreshCw, RotateCcw, 
   AlertCircle, CheckCircle2, Clock, Upload, Send, MessageSquare, 
-  Truck, ArrowRight, ShieldAlert, X, ChevronRight, ChevronLeft, Image as ImageIcon
+  Truck, ShieldAlert, X, ChevronRight, ChevronLeft,
+  Building, ShieldCheck, ExternalLink
 } from 'lucide-react';
 import { useAuthStore } from '../store/useAuthStore';
 import { useCartStore } from '../store/useCartStore';
@@ -49,6 +50,13 @@ export function MyOrdersPage() {
   const [uploadingImage, setUploadingImage] = useState(false);
   const [submittingReturn, setSubmittingReturn] = useState(false);
   const [formError, setFormError] = useState('');
+
+  // Bank Details Form (Mandatory for Direct Refund)
+  const [bankHolderName, setBankHolderName] = useState('');
+  const [bankAccountNumber, setBankAccountNumber] = useState('');
+  const [confirmBankAccountNumber, setConfirmBankAccountNumber] = useState('');
+  const [bankIfsc, setBankIfsc] = useState('');
+  const [bankName, setBankName] = useState('');
 
   // Shipping Form
   const [courierName, setCourierName] = useState('');
@@ -118,13 +126,33 @@ export function MyOrdersPage() {
     return { eligible: true, daysLeft: Math.max(0, 7 - Math.floor(diffDays)) };
   };
 
-  const handleOpenRequestModal = (order) => {
+  const handleOpenRequestModal = async (order) => {
     setSelectedOrder(order);
     setReturnReason(RETURN_REASONS[0]);
     setReturnDescription('');
     setReturnImages([]);
     setFormError('');
+    setBankHolderName(order.address?.name || user?.name || '');
+    setBankAccountNumber('');
+    setConfirmBankAccountNumber('');
+    setBankIfsc('');
+    setBankName('');
     setActiveModal('request');
+
+    // Auto-prefill saved bank if user has previously submitted bank details
+    try {
+      const res = await axios.get('/api/returns/saved-bank', {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (res.data?.savedBank) {
+        const b = res.data.savedBank;
+        if (b.account_name) setBankHolderName(b.account_name);
+        if (b.ifsc_code) setBankIfsc(b.ifsc_code);
+        if (b.bank_name) setBankName(b.bank_name);
+      }
+    } catch {
+      // non-fatal prefill fallback
+    }
   };
 
   const handleOpenDetailsModal = async (ret) => {
@@ -168,11 +196,38 @@ export function MyOrdersPage() {
 
   const handleSubmitReturn = async (e) => {
     e.preventDefault();
+    setFormError('');
+
     if (!returnReason) { setFormError('Please select a return reason'); return; }
     if (!returnDescription.trim()) { setFormError('Please provide a brief description of the issue'); return; }
 
+    const cleanHolder = bankHolderName.trim();
+    const cleanAcc = bankAccountNumber.trim();
+    const cleanConfirm = confirmBankAccountNumber.trim();
+    const cleanIfsc = bankIfsc.trim().toUpperCase();
+    const cleanBank = bankName.trim();
+
+    if (!cleanHolder || !cleanAcc || !cleanConfirm || !cleanIfsc || !cleanBank) {
+      setFormError('All bank details (Account Holder Name, Bank Name, IFSC Code, Account Number, and Confirm Account Number) are strictly required for your refund.');
+      return;
+    }
+
+    if (cleanAcc !== cleanConfirm) {
+      setFormError('Bank Account Number and Confirm Account Number do not match.');
+      return;
+    }
+
+    if (!/^\d{9,18}$/.test(cleanAcc)) {
+      setFormError('Bank account number must be between 9 and 18 numeric digits.');
+      return;
+    }
+
+    if (!/^[A-Z]{4}0[A-Z0-9]{6}$/.test(cleanIfsc)) {
+      setFormError('Invalid IFSC code format. IFSC must be 11 characters (e.g. SBIN0001234, HDFC0000123).');
+      return;
+    }
+
     setSubmittingReturn(true);
-    setFormError('');
     try {
       let items = [];
       try {
@@ -186,7 +241,12 @@ export function MyOrdersPage() {
         reason: returnReason,
         description: returnDescription.trim(),
         images: returnImages,
-        items: items
+        items: items,
+        bank_holder_name: cleanHolder,
+        bank_account_number: cleanAcc,
+        confirm_bank_account_number: cleanConfirm,
+        bank_ifsc: cleanIfsc,
+        bank_name: cleanBank
       };
 
       const res = await axios.post('/api/returns/request', payload, {
@@ -199,7 +259,7 @@ export function MyOrdersPage() {
         setActiveModal('details');
       }
     } catch (err) {
-      setFormError(err.response?.data?.message || 'Failed to submit return request. Please try again.');
+      setFormError(err.response?.data?.error || err.response?.data?.message || 'Failed to submit return request. Please try again.');
     } finally {
       setSubmittingReturn(false);
     }
@@ -764,8 +824,89 @@ export function MyOrdersPage() {
                 )}
               </div>
 
+              {/* MANDATORY CUSTOMER BANK DETAILS FOR DIRECT REFUND */}
+              <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4 space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Building className="w-4 h-4 text-[#012980]" />
+                    <span className="text-xs font-bold text-gray-900">Bank Details for Direct Refund *</span>
+                  </div>
+                  <span className="text-[10px] font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full flex items-center gap-1">
+                    <ShieldCheck className="w-3 h-3 text-emerald-600" /> 256-bit Encrypted
+                  </span>
+                </div>
+                <p className="text-[11px] text-gray-500 leading-normal">
+                  Your approved refund will be credited directly to this bank account via bank transfer. Please verify your details carefully.
+                </p>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div className="sm:col-span-2">
+                    <label className="block text-[11px] font-bold text-gray-700 mb-1">Account Holder Name *</label>
+                    <input
+                      type="text"
+                      placeholder="Name as printed on bank passbook"
+                      value={bankHolderName}
+                      onChange={(e) => setBankHolderName(e.target.value)}
+                      className="w-full text-xs p-2.5 rounded-xl border border-gray-300 bg-white focus:outline-none focus:ring-2 focus:ring-[#012980]"
+                      required
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[11px] font-bold text-gray-700 mb-1">Bank Name *</label>
+                    <input
+                      type="text"
+                      placeholder="e.g. State Bank of India, HDFC"
+                      value={bankName}
+                      onChange={(e) => setBankName(e.target.value)}
+                      className="w-full text-xs p-2.5 rounded-xl border border-gray-300 bg-white focus:outline-none focus:ring-2 focus:ring-[#012980]"
+                      required
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[11px] font-bold text-gray-700 mb-1">IFSC Code *</label>
+                    <input
+                      type="text"
+                      placeholder="e.g. SBIN0001234"
+                      maxLength={11}
+                      value={bankIfsc}
+                      onChange={(e) => setBankIfsc(e.target.value.toUpperCase())}
+                      className="w-full text-xs p-2.5 rounded-xl border border-gray-300 bg-white font-mono uppercase focus:outline-none focus:ring-2 focus:ring-[#012980]"
+                      required
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[11px] font-bold text-gray-700 mb-1">Bank Account Number *</label>
+                    <input
+                      type="text"
+                      placeholder="9 to 18 digits"
+                      maxLength={18}
+                      value={bankAccountNumber}
+                      onChange={(e) => setBankAccountNumber(e.target.value.replace(/\D/g, ''))}
+                      className="w-full text-xs p-2.5 rounded-xl border border-gray-300 bg-white font-mono focus:outline-none focus:ring-2 focus:ring-[#012980]"
+                      required
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[11px] font-bold text-gray-700 mb-1">Confirm Bank Account Number *</label>
+                    <input
+                      type="text"
+                      placeholder="Re-enter bank account number"
+                      maxLength={18}
+                      value={confirmBankAccountNumber}
+                      onChange={(e) => setConfirmBankAccountNumber(e.target.value.replace(/\D/g, ''))}
+                      className="w-full text-xs p-2.5 rounded-xl border border-gray-300 bg-white font-mono focus:outline-none focus:ring-2 focus:ring-[#012980]"
+                      required
+                    />
+                  </div>
+                </div>
+              </div>
+
               <div className="p-3 bg-amber-50 rounded-xl text-[11px] text-amber-800 leading-relaxed border border-amber-100">
-                <strong>Policy Notice:</strong> Your request will be directly reviewed by the product vendor. Once approved, you will ship the item back, and upon receipt, your refund will be issued.
+                <strong>Policy Notice:</strong> Your return request and refund will be reviewed by the store admin and vendor. Refunds are issued via direct bank transfer only after the returned product is approved and received.
               </div>
 
               <div className="flex justify-end gap-3 pt-2">
@@ -844,16 +985,47 @@ export function MyOrdersPage() {
               </div>
             )}
 
-            {selectedReturn.status === 'Refund Completed' && (
-              <div className="p-4 bg-emerald-50 border border-emerald-200 rounded-2xl text-xs text-emerald-900 space-y-1">
-                <div className="flex items-center gap-2 font-bold text-emerald-950">
-                  <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-                  Refund Successfully Processed
+            {/* Refund Processing Banner */}
+            {selectedReturn.status === 'Refund Processing' && (
+              <div className="p-4 bg-sky-50 border border-sky-200 rounded-2xl text-xs text-sky-950 space-y-1">
+                <div className="flex items-center gap-2 font-bold text-sky-900">
+                  <Clock className="w-4 h-4 text-sky-600 animate-spin" />
+                  Refund Processing Initiated
                 </div>
-                <p>Amount: <strong>₹{Number(selectedReturn.refund_amount || 0).toLocaleString('en-IN')}</strong></p>
-                <p>Method: <strong className="capitalize">{selectedReturn.refund_method || 'Original Payment'}</strong></p>
-                {selectedReturn.refund_reference && <p>Reference / UTR: <strong className="font-mono">{selectedReturn.refund_reference}</strong></p>}
-                {selectedReturn.refunded_at && <p>Date: {new Date(selectedReturn.refunded_at).toLocaleString('en-IN')}</p>}
+                <p>Your return has been received and verified. Our finance team is currently transferring <strong>₹{Number(selectedReturn.approved_refund_amount || selectedReturn.refund_amount || 0).toLocaleString('en-IN')}</strong> directly to your bank account ({selectedReturn.bank_name || 'Bank'} {selectedReturn.bank_account_masked || (selectedReturn.bank_account_last4 ? `••••••••${selectedReturn.bank_account_last4}` : '')}).</p>
+              </div>
+            )}
+
+            {/* Refund Completed Banner with UTR */}
+            {selectedReturn.status === 'Refund Completed' && (
+              <div className="p-4 bg-emerald-50 border border-emerald-200 rounded-2xl text-xs text-emerald-950 space-y-2">
+                <div className="flex items-center gap-2 font-bold text-emerald-900">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                  Refund Successfully Completed
+                </div>
+                <div className="grid grid-cols-2 gap-2 p-3 bg-white/90 rounded-xl border border-emerald-200 text-[11px]">
+                  <div>
+                    <span className="text-gray-500 block">Refund Amount</span>
+                    <span className="font-bold text-emerald-700 text-sm">₹{Number(selectedReturn.refund_amount || selectedReturn.approved_refund_amount || 0).toLocaleString('en-IN')}</span>
+                  </div>
+                  <div>
+                    <span className="text-gray-500 block">Bank Transfer / UTR</span>
+                    <span className="font-mono font-bold text-gray-900 bg-emerald-100/60 px-1.5 py-0.5 rounded text-xs">{selectedReturn.refund_utr || selectedReturn.refund_reference || 'N/A'}</span>
+                  </div>
+                  <div>
+                    <span className="text-gray-500 block">Transfer Date</span>
+                    <span className="font-semibold text-gray-900">{selectedReturn.refund_transfer_date ? new Date(selectedReturn.refund_transfer_date).toLocaleDateString('en-IN') : (selectedReturn.refunded_at ? new Date(selectedReturn.refunded_at).toLocaleDateString('en-IN') : 'Completed')}</span>
+                  </div>
+                  <div>
+                    <span className="text-gray-500 block">Destination</span>
+                    <span className="font-semibold text-gray-900">{selectedReturn.bank_name || 'Bank'} ({selectedReturn.bank_account_masked || (selectedReturn.bank_account_last4 ? `••••${selectedReturn.bank_account_last4}` : '')})</span>
+                  </div>
+                </div>
+                {selectedReturn.admin_remarks && (
+                  <p className="text-[11px] text-emerald-800">
+                    <strong>Admin Note:</strong> {selectedReturn.admin_remarks}
+                  </p>
+                )}
               </div>
             )}
 
@@ -885,6 +1057,36 @@ export function MyOrdersPage() {
                 </div>
               )}
             </div>
+
+            {/* Refund Bank Details Card */}
+            {(selectedReturn.bank_name || selectedReturn.bank_holder_name) && (
+              <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4 space-y-2 text-xs">
+                <div className="flex items-center justify-between pb-1.5 border-b border-slate-200">
+                  <span className="font-bold text-gray-900 flex items-center gap-1.5">
+                    <Building className="w-3.5 h-3.5 text-[#012980]" /> Refund Destination Bank
+                  </span>
+                  <span className="text-[10px] text-gray-500 font-mono font-semibold bg-gray-100 px-2 py-0.5 rounded">
+                    IFSC: {selectedReturn.bank_ifsc || 'N/A'}
+                  </span>
+                </div>
+                <div className="grid grid-cols-2 gap-2 pt-1 text-[11px]">
+                  <div>
+                    <span className="text-gray-500 block">Account Holder</span>
+                    <span className="font-semibold text-gray-900">{selectedReturn.bank_holder_name || 'N/A'}</span>
+                  </div>
+                  <div>
+                    <span className="text-gray-500 block">Bank Name</span>
+                    <span className="font-semibold text-gray-900">{selectedReturn.bank_name || 'Bank'}</span>
+                  </div>
+                  <div className="col-span-2">
+                    <span className="text-gray-500 block">Account Number (Masked)</span>
+                    <span className="font-mono font-semibold text-gray-900 tracking-wider">
+                      {selectedReturn.bank_account_masked || (selectedReturn.bank_account_last4 ? `••••••••${selectedReturn.bank_account_last4}` : '••••••••')}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            )}
 
             {/* Supporting Photos */}
             {selectedReturn.images && selectedReturn.images.length > 0 && (
