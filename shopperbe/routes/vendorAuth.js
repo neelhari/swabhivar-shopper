@@ -686,7 +686,7 @@ const vendorAuthMiddleware = async (req, res, next) => {
 router.get('/me', vendorAuthMiddleware, async (req, res) => {
   try {
     const result = await pool.query(
-      `SELECT v.id, v.name, v.username, v.store_name, v.email, v.phone, v.address, v.status,
+      `SELECT v.id, v.name, v.store_name, v.email, v.phone, v.address, v.status,
               v.wallet_balance, COALESCE(v.outstanding_debt, 0) as outstanding_debt,
               v.subscription_expires_at, v.created_at, v.referral_code,
               v.bank_account_holder_name, v.bank_account_number, v.bank_ifsc_code, v.bank_name,
